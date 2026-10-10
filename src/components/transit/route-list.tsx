@@ -8,7 +8,7 @@ import { cn, plural } from "@/lib/utils";
 
 export function RouteBadge({ route, className }: { route: TransitRoute; className?: string }) {
   return (
-    <span className={cn("inline-grid place-items-center min-w-10 h-8 px-2 rounded-lg text-sm font-bold shadow-sm shrink-0", className)} style={{ background: route.color, color: route.textColor }}>
+    <span className={cn("route-badge inline-grid place-items-center min-w-10 h-8 px-2 rounded-lg text-sm font-bold shadow-sm shrink-0", className)} style={{ background: route.color, color: route.textColor }}>
       {route.shortName}
     </span>
   );
@@ -32,7 +32,7 @@ export function RouteList({ routes, selectedId, onSelect }: { routes: TransitRou
         {shown.map((r) => (
           <li key={r.id}>
             <button type="button" onClick={() => onSelect(r.id)} aria-current={r.id === selectedId}
-              className={cn("w-full flex items-center gap-3 rounded-xl border px-3 py-2.5 text-left transition-colors", r.id === selectedId ? "border-carolina bg-carolina-soft/60 shadow-sm" : "border-transparent hover:bg-fg/5 hover:border-border")}>
+              className={cn("route-row w-full flex items-center gap-3 rounded-2xl border px-3 py-2.5 text-left transition-colors", r.id === selectedId ? "border-carolina bg-carolina-soft/60 shadow-sm" : "border-transparent hover:bg-fg/5 hover:border-border")}>
               <RouteBadge route={r} />
               <span className="min-w-0 flex-1">
                 <span className="block text-sm font-medium truncate">{r.longName || `Route ${r.shortName}`}</span>

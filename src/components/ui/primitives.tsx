@@ -12,17 +12,17 @@ import { cn } from "@/lib/utils";
 
 // ---------- Inputs ----------
 export const Input = React.forwardRef<HTMLInputElement, React.InputHTMLAttributes<HTMLInputElement>>(({ className, ...props }, ref) => (
-  <input ref={ref} className={cn("flex h-10 w-full rounded-xl border border-border bg-bg-elev px-3.5 text-sm placeholder:text-fg-faint focus-visible:border-carolina focus-visible:ring-4 focus-visible:ring-carolina/20 focus-visible:outline-none transition-shadow", className)} {...props} />
+  <input ref={ref} className={cn("aero-input flex h-10 w-full rounded-xl border border-border bg-bg-elev px-3.5 text-sm placeholder:text-fg-faint focus-visible:border-carolina focus-visible:ring-4 focus-visible:ring-carolina/20 focus-visible:outline-none transition-shadow", className)} {...props} />
 ));
 Input.displayName = "Input";
 
 export const Textarea = React.forwardRef<HTMLTextAreaElement, React.TextareaHTMLAttributes<HTMLTextAreaElement>>(({ className, ...props }, ref) => (
-  <textarea ref={ref} className={cn("flex min-h-[88px] w-full rounded-xl border border-border bg-bg-elev px-3.5 py-2.5 text-sm placeholder:text-fg-faint focus-visible:border-carolina focus-visible:ring-4 focus-visible:ring-carolina/20 focus-visible:outline-none transition-shadow resize-none", className)} {...props} />
+  <textarea ref={ref} className={cn("aero-input flex min-h-[88px] w-full rounded-xl border border-border bg-bg-elev px-3.5 py-2.5 text-sm placeholder:text-fg-faint focus-visible:border-carolina focus-visible:ring-4 focus-visible:ring-carolina/20 focus-visible:outline-none transition-shadow resize-none", className)} {...props} />
 ));
 Textarea.displayName = "Textarea";
 
 export const Select = React.forwardRef<HTMLSelectElement, React.SelectHTMLAttributes<HTMLSelectElement>>(({ className, children, ...props }, ref) => (
-  <select ref={ref} className={cn("flex h-10 w-full rounded-xl border border-border bg-bg-elev px-3 text-sm focus-visible:border-carolina focus-visible:ring-4 focus-visible:ring-carolina/20 focus-visible:outline-none", className)} {...props}>
+  <select ref={ref} className={cn("aero-input flex h-10 w-full rounded-xl border border-border bg-bg-elev px-3 text-sm focus-visible:border-carolina focus-visible:ring-4 focus-visible:ring-carolina/20 focus-visible:outline-none", className)} {...props}>
     {children}
   </select>
 ));
@@ -87,7 +87,7 @@ export function DialogContent({ className, children, title, description, hideClo
 // ---------- Tabs ----------
 export const Tabs = TabsPrimitive.Root;
 export function TabsList({ className, ...props }: React.ComponentPropsWithoutRef<typeof TabsPrimitive.List>) {
-  return <TabsPrimitive.List className={cn("inline-flex items-center gap-1 rounded-xl bg-fg/5 p-1", className)} {...props} />;
+  return <TabsPrimitive.List className={cn("aero-tabs inline-flex items-center gap-1 rounded-2xl bg-fg/5 p-1", className)} {...props} />;
 }
 export function TabsTrigger({ className, ...props }: React.ComponentPropsWithoutRef<typeof TabsPrimitive.Trigger>) {
   return <TabsPrimitive.Trigger className={cn("inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium text-fg-muted transition-all data-[state=active]:bg-bg-elev data-[state=active]:text-fg data-[state=active]:shadow-sm hover:text-fg whitespace-nowrap", className)} {...props} />;

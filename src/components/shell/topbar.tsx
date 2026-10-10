@@ -30,14 +30,14 @@ export function TopBar({ overlay = false, className }: { overlay?: boolean; clas
     setQ("");
   };
 
-  const box = overlay ? "glass-strong" : "bg-fg/5";
+  const box = "aero-search";
   return (
-    <header className={cn("z-30 flex items-center gap-2 sm:gap-3 px-3 sm:px-4 h-14", overlay ? "absolute top-0 left-0 right-0 md:left-[72px]" : "sticky top-0 border-b border-border bg-bg-elev/80 backdrop-blur-xl md:ml-[72px]", className)}>
+    <header className={cn("aero-topbar z-30 flex items-center gap-2 sm:gap-3 px-3 sm:px-4 h-14", overlay ? "is-overlay absolute top-0 left-0 right-0 md:left-[72px]" : "sticky top-0 border-b border-border bg-bg-elev/80 backdrop-blur-xl md:ml-[72px]", className)}>
       <div className={cn("md:hidden", overlay && "glass rounded-2xl px-2 py-1")}><Logo compact /></div>
-      <form onSubmit={submit} role="search" className={cn("flex-1 min-w-0 max-w-xl flex items-center gap-2 rounded-xl h-10 px-3 mx-auto", box)}>
+      <form onSubmit={submit} role="search" className={cn("flex-1 min-w-0 max-w-xl flex items-center gap-2 rounded-full h-10 px-4 mx-auto", box)}>
         <Search className="size-4 text-fg-faint shrink-0" />
         <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search, or ask what's happening…" aria-label="Search or ask" className="flex-1 bg-transparent outline-none text-sm placeholder:text-fg-faint min-w-0" />
-        <button type="button" onClick={() => openAssistant(q || undefined)} className="inline-flex items-center gap-1 rounded-lg px-2 h-7 text-xs text-carolina hover:bg-carolina-soft/60" aria-label="Ask a question"><Sparkles className="size-3.5" /><span className="hidden sm:inline">Ask</span></button>
+        <button type="button" onClick={() => openAssistant(q || undefined)} className="inline-flex items-center gap-1.5 rounded-full px-3 h-7 text-xs font-medium text-carolina bg-carolina-soft/40 hover:bg-carolina-soft transition-colors" aria-label="Ask a question"><Sparkles className="size-3.5" /><span className="hidden sm:inline">Ask</span></button>
       </form>
       <BellMenu overlay={overlay} />
       <AccountMenu overlay={overlay} userName={user?.displayName} avatar={user?.avatar} />
@@ -64,7 +64,7 @@ function BellMenu({ overlay }: { overlay: boolean }) {
   return (
     <Dropdown open={open} onOpenChange={setOpen}>
       <DropdownTrigger asChild>
-        <button type="button" aria-label={`Notifications${unread ? `, ${unread} unread` : ""}`} className={cn("relative grid size-10 place-items-center rounded-xl text-fg-muted hover:text-fg", overlay ? "glass-strong" : "hover:bg-fg/5")}>
+        <button type="button" aria-label={`Notifications${unread ? `, ${unread} unread` : ""}`} className={cn("aero-account-control relative grid size-10 place-items-center rounded-xl text-fg-muted hover:text-fg", overlay ? "glass-strong" : "hover:bg-fg/5")}>
           <Bell className="size-4" />
           {unread > 0 && <span className="absolute right-1.5 top-1.5 min-w-4 h-4 px-1 rounded-full bg-red text-white text-[10px] font-bold grid place-items-center">{unread > 9 ? "9+" : unread}</span>}
         </button>
@@ -102,7 +102,7 @@ function AccountMenu({ overlay, userName, avatar }: { overlay: boolean; userName
   return (
     <Dropdown>
       <DropdownTrigger asChild>
-        <button type="button" aria-label="Account menu" className={cn("grid size-10 place-items-center rounded-xl", overlay ? "glass-strong" : "hover:bg-fg/5")}>
+        <button type="button" aria-label="Account menu" className={cn("aero-account-control grid size-10 place-items-center rounded-xl", overlay ? "glass-strong" : "hover:bg-fg/5")}>
           <Avatar emoji={avatar} name={userName} size={30} />
         </button>
       </DropdownTrigger>

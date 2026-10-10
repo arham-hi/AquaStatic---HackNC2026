@@ -89,8 +89,9 @@ export function HomeMap() {
       <Bubbles className="hidden md:block" />
 
       {/* One line: who you are and how much is going on. */}
-      <div className="absolute left-3 md:left-4 top-16 md:top-[70px] glass-strong rounded-2xl px-4 py-2.5 animate-rise max-w-[calc(100vw-24px)]">
-        <h1 className="text-base font-semibold tracking-tight leading-tight">{greeting()}, {firstName}.</h1>
+      <div className="absolute left-3 md:left-4 top-[76px] md:top-[90px] glass-strong rounded-2xl px-5 py-4 animate-rise max-w-[calc(100vw-24px)]">
+        <div className="aero-eyebrow !mb-2">Your campus, in real time</div>
+        <h1 className="text-lg font-semibold tracking-tight leading-tight">{greeting()}, {firstName}.</h1>
         <p className="text-xs text-fg-muted mt-0.5">
           {live == null ? "Loading campus…" : live === 0 ? "Quiet right now. Be the first to post." : `${plural(live, "thing")} happening on campus right now.`}
         </p>

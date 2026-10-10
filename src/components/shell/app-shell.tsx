@@ -33,9 +33,10 @@ export function AppShell({ children }: { children: ReactNode }) {
 /** Standard page container for non-map pages. */
 export function Page({ title, subtitle, actions, children, wide }: { title: string; subtitle?: string; actions?: ReactNode; children: ReactNode; wide?: boolean }) {
   return (
-    <div className={cn("relative mx-auto px-4 sm:px-6 py-6", wide ? "max-w-[1400px]" : "max-w-6xl")}>
-      <div className="flex flex-wrap items-end justify-between gap-3 mb-5">
+    <div className={cn("aero-page relative mx-auto px-4 sm:px-8 py-6", wide ? "max-w-[1400px]" : "max-w-6xl")}>
+      <div className="aero-page-heading flex flex-wrap items-end justify-between gap-3 mb-5">
         <div>
+          <div className="aero-eyebrow">Aqua Static / Campus life</div>
           <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight">{title}</h1>
           {subtitle && <p className="text-sm text-fg-muted mt-1 max-w-2xl">{subtitle}</p>}
         </div>
