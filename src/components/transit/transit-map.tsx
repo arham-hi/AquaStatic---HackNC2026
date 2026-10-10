@@ -1,10 +1,12 @@
 "use client";
 // Dedicated MapLibre instance for the Transit page: route lines, stop circles, optional 3D buildings.
-// Schedule geometry only — there are no vehicle positions in the feed, so none are drawn.
+// Vehicle positions are a labeled local simulation over schedule geometry.
 
 import { useEffect, useRef, useState } from "react";
 import maplibregl from "@/lib/maplibre";
-import { Box, LocateFixed } from "lucide-react";
+import { Box, Bus, LocateFixed } from "lucide-react";
+import { createBusJourneys } from "./simulated-buses";
+import { BUS_LAYER_ID, createBusModelLayer } from "./bus-model-layer";
 import { CAMPUS_CENTER } from "@/lib/locations";
 import type { TransitRoute, TransitStop } from "@/lib/services/transit";
 import { Button } from "@/components/ui/button";
@@ -82,10 +84,26 @@ export function TransitMap({ theme, routes, stops, selectedId, onSelect, focus, 
   const styleReady = useRef(false); // true between style.load and the next setStyle; isStyleLoaded() is false while tiles stream
   const [styleGen, setStyleGen] = useState(0);
   const [show3d, setShow3d] = useState(false);
+  const [busesEnabled, setBusesEnabled] = useState(true);
+  const simulationSeconds = useRef(0);
+  const busHit = useRef<((point: maplibregl.PointLike) => string | null) | null>(null);
   // Latest props for the style.load handler, which outlives any render.
   const latest = useRef({ routes, stops, selectedId, show3d, onSelect });
   latest.current = { routes, stops, selectedId, show3d, onSelect };
   const selected = routes.find((r) => r.id === selectedId) ?? null;
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !styleReady.current || !busesEnabled) return;
+    const journeys = createBusJourneys(selectedId ? routes.filter((route) => route.id === selectedId) : routes, stops);
+    const models = createBusModelLayer(journeys, simulationSeconds);
+    map.addLayer(models.layer);
+    busHit.current = models.hit;
+    return () => {
+      busHit.current = null;
+      if (map.getLayer(BUS_LAYER_ID)) map.removeLayer(BUS_LAYER_ID);
+    };
+  }, [routes, stops, selectedId, busesEnabled, styleGen]);
 
   useEffect(() => {
     if (!el.current || mapRef.current) return;
@@ -103,6 +121,8 @@ export function TransitMap({ theme, routes, stops, selectedId, onSelect, focus, 
     // Delegated hit-testing (layers may not exist yet; per-layer listeners would error until they do).
     const hit = (p: maplibregl.PointLike) => map.queryRenderedFeatures(p, { layers: ["stops-circle", "routes-line"].filter((l) => map.getLayer(l)) });
     map.on("click", (e) => {
+      const busRoute = busHit.current?.(e.point);
+      if (busRoute) { latest.current.onSelect(busRoute); return; }
       const f = hit(e.point)[0];
       if (!f) return;
       if (f.layer.id === "routes-line") { latest.current.onSelect(f.properties.id as string); return; }
@@ -111,7 +131,7 @@ export function TransitMap({ theme, routes, stops, selectedId, onSelect, focus, 
       popup.current?.remove();
       popup.current = new maplibregl.Popup({ closeButton: false, offset: 10 }).setLngLat([lng, lat]).setHTML(popupHtml({ ...p, lat, lng })).addTo(map);
     });
-    map.on("mousemove", (e) => { map.getCanvas().style.cursor = hit(e.point).length ? "pointer" : ""; });
+    map.on("mousemove", (e) => { map.getCanvas().style.cursor = busHit.current?.(e.point) || hit(e.point).length ? "pointer" : ""; });
     const ro = new ResizeObserver(() => map.resize());
     ro.observe(el.current);
     mapRef.current = map;
@@ -161,6 +181,16 @@ export function TransitMap({ theme, routes, stops, selectedId, onSelect, focus, 
         <Button variant="glass" size="sm" onClick={() => mapRef.current?.flyTo({ ...HOME, duration: 900, essential: true })}><LocateFixed /> Reset view</Button>
         <Button variant="glass" size="sm" aria-pressed={show3d} className={cn(show3d && "bg-carolina-soft text-carolina")} onClick={() => setShow3d((v) => !v)}><Box /> 3D buildings</Button>
       </div>
+      <button
+        type="button"
+        className={cn("absolute bottom-9 left-3 flex size-10 items-center justify-center rounded-full transition-colors hover:bg-bg-elev/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-carolina", busesEnabled ? "text-carolina" : "text-fg-muted")}
+        aria-label={busesEnabled ? "Hide demo 3D buses" : "Show demo 3D buses"}
+        title={busesEnabled ? "Hide demo 3D buses" : "Show demo 3D buses"}
+        aria-pressed={busesEnabled}
+        onClick={() => setBusesEnabled((value) => !value)}
+      >
+        <Bus className="size-6" aria-hidden />
+      </button>
     </div>
   );
 }
