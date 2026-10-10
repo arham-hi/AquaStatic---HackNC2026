@@ -8,7 +8,7 @@ import { TopBar } from "./topbar";
 import { CreatePostDialog } from "@/components/posts/create-post-dialog";
 import { AssistantDock } from "@/components/assistant/assistant-dock";
 import { cn } from "@/lib/utils";
-import { Bubbles } from "./bubbles";
+import { PageBubbles } from "./bubbles";
 
 /** Layout chrome. The home page renders the top bar as an overlay on the map; other pages get a sticky bar. */
 export function AppShell({ children }: { children: ReactNode }) {
@@ -18,8 +18,9 @@ export function AppShell({ children }: { children: ReactNode }) {
     <TooltipProvider>
       <div className="min-h-dvh aero-bg">
         <NavRail />
+        {!isMap && <PageBubbles />}
         {!isMap && <TopBar />}
-        <main className={cn("md:ml-[72px]", isMap ? "h-dvh" : "pb-24 md:pb-10")}>{children}</main>
+        <main className={cn("md:ml-[72px] relative z-10", isMap ? "h-dvh" : "pb-24 md:pb-10")}>{children}</main>
         <BottomNav />
         <Fab />
         <CreatePostDialog />
@@ -33,7 +34,6 @@ export function AppShell({ children }: { children: ReactNode }) {
 export function Page({ title, subtitle, actions, children, wide }: { title: string; subtitle?: string; actions?: ReactNode; children: ReactNode; wide?: boolean }) {
   return (
     <div className={cn("relative mx-auto px-4 sm:px-6 py-6", wide ? "max-w-[1400px]" : "max-w-6xl")}>
-      <Bubbles className="h-48 -z-10" />
       <div className="flex flex-wrap items-end justify-between gap-3 mb-5">
         <div>
           <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight">{title}</h1>
