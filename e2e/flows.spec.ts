@@ -90,7 +90,7 @@ test("two users: request → offer → match → accept both → chat → comple
 
   // Assistant is grounded in the stored request.
   await pm.goto("/");
-  await pm.getByRole("button", { name: "Ask Aqua Static" }).click();
+  await pm.getByRole("button", { name: "Ask a question" }).click();
   await pm.getByPlaceholder("Ask anything about campus…").fill("What help requests are there around Davis Library?");
   await pm.keyboard.press("Enter");
   await expect(pm.getByText(/USB-C laptop charger/).first()).toBeVisible({ timeout: 20000 });
