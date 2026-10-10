@@ -22,7 +22,7 @@ export const env = {
   gemini: { apiKey: process.env.GEMINI_API_KEY || "", model: process.env.GEMINI_MODEL || "gemini-3.8-flash" },
   elevenlabs: {
     apiKey: process.env.ELEVENLABS_API_KEY || "",
-    voiceId: process.env.ELEVENLABS_VOICE_ID || "21m00Tcm4TlvDq8ikWAM",
+    voiceId: process.env.ELEVENLABS_VOICE_ID || "cgSgspJ2msm6clMCkdW9",
     voiceId2: process.env.ELEVENLABS_VOICE_ID_2 || "",
   },
   photon: { projectId: process.env.SPECTRUM_PROJECT_ID || "", projectSecret: process.env.SPECTRUM_PROJECT_SECRET || "" },
