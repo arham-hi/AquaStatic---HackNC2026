@@ -156,7 +156,7 @@ export function TransitMap({ theme, routes, stops, selectedId, onSelect, focus, 
 
   return (
     <div className={cn("relative overflow-hidden rounded-2xl border border-border shadow-md bg-bg-elev", className)}>
-      <div ref={el} className="absolute inset-0" />
+      <div ref={el} className="aqua-map absolute inset-0" />
       <div className="absolute left-3 top-3 flex flex-col gap-2">
         <Button variant="glass" size="sm" onClick={() => mapRef.current?.flyTo({ ...HOME, duration: 900, essential: true })}><LocateFixed /> Reset view</Button>
         <Button variant="glass" size="sm" aria-pressed={show3d} className={cn(show3d && "bg-carolina-soft text-carolina")} onClick={() => setShow3d((v) => !v)}><Box /> 3D buildings</Button>

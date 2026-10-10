@@ -97,7 +97,7 @@ test("two users: request → offer → match → accept both → chat → comple
 
   // Radio briefing mentions the new activity and labels demo data.
   await pm.goto("/radio");
-  await pm.getByRole("button", { name: /Generate/ }).click();
+  await pm.getByRole("button", { name: /^Generate Campus Radio$/ }).click();
   await expect(pm.getByText(/Includes demo data/).first()).toBeVisible({ timeout: 30000 });
   await expect(pm.getByRole("tab", { name: /Transcript/ })).toBeVisible();
   await pm.getByRole("tab", { name: /Transcript/ }).click();
