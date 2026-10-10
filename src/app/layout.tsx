@@ -18,7 +18,7 @@ export const viewport: Viewport = { themeColor: [{ media: "(prefers-color-scheme
 
 export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   const jar = await cookies();
-  const theme = jar.get("aqua-theme")?.value === "light" ? "light" : "dark";
+  const theme = jar.get("aqua-theme")?.value === "dark" ? "dark" : "light";
   return (
     <html lang="en" data-theme={theme} suppressHydrationWarning>
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>

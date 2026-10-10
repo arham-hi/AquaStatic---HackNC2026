@@ -9,6 +9,7 @@ import { RotateCcw, HeartHandshake } from "lucide-react";
 import { useLive } from "@/hooks/useLive";
 import { useSession, useUI } from "@/components/shell/providers";
 import { TopBar } from "@/components/shell/topbar";
+import { Bubbles } from "@/components/shell/bubbles";
 import { PostDetail } from "@/components/posts/post-detail";
 import { greeting } from "@/lib/time";
 import { getLocation } from "@/lib/locations";
@@ -85,6 +86,7 @@ export function HomeMap() {
     <div className="relative h-dvh w-full overflow-hidden">
       <CampusMap theme={theme} markers={markers} selectedId={selected?.id ?? null} onSelect={select} show3d transit={null} connections={connections} onReady={setHandle} className="absolute inset-0" />
       <TopBar overlay />
+      <Bubbles className="hidden md:block" />
 
       {/* One line: who you are and how much is going on. */}
       <div className="absolute left-3 md:left-4 top-16 md:top-[70px] glass-strong rounded-2xl px-4 py-2.5 animate-rise max-w-[calc(100vw-24px)]">

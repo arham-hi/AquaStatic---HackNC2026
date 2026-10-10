@@ -109,7 +109,7 @@ function AccountMenu({ overlay, userName, avatar }: { overlay: boolean; userName
       <DropdownContent>
         <DropdownLabel>{user ? user.displayName : "Browsing as a guest"}</DropdownLabel>
         <DropdownItem asChild><Link href="/profile"><UserRound className="size-4" /> Name, avatar & interests</Link></DropdownItem>
-        <DropdownItem onSelect={() => setTheme(theme === "dark" ? "light" : "dark")}>{theme === "dark" ? <Sun className="size-4" /> : <Moon className="size-4" />} {theme === "dark" ? "Light theme" : "Dark theme"}</DropdownItem>
+        <DropdownItem onSelect={() => setTheme(theme === "dark" ? "light" : "dark")}>{theme === "dark" ? <Sun className="size-4" /> : <Moon className="size-4" />} {theme === "dark" ? "Aero (day)" : "Night"}</DropdownItem>
         {demoMode && (
           <>
             <DropdownSeparator />

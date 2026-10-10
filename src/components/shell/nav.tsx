@@ -64,7 +64,7 @@ export function BottomNav() {
           </Link>
         ) : (
           <button key={i} type="button" onClick={() => openCreate()} aria-label="Create a post" className="flex items-center justify-center">
-            <span className="grid size-12 -mt-6 place-items-center rounded-2xl bg-carolina text-white shadow-lg"><Plus className="size-6" /></span>
+            <span className="grid size-12 -mt-6 place-items-center rounded-2xl btn-aero text-white"><Plus className="size-6" /></span>
           </button>
         ))}
       </div>
@@ -77,7 +77,7 @@ export function Fab() {
   const { openCreate } = useUI();
   return (
     <button type="button" onClick={() => openCreate()} aria-label="Create a post"
-      className="hidden md:grid fixed bottom-6 right-6 z-40 size-14 place-items-center rounded-2xl bg-carolina text-white shadow-[0_14px_30px_-10px_rgba(75,156,211,0.95)] hover:brightness-110 active:scale-95 transition-all">
+      className="hidden md:grid fixed bottom-6 right-6 z-40 size-14 place-items-center rounded-2xl btn-aero text-white active:scale-95 transition-all">
       <Plus className="size-7" />
     </button>
   );

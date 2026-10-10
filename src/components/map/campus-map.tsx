@@ -56,11 +56,11 @@ function add3d(map: maplibregl.Map, dark: boolean) {
   map.addLayer({
     id: "aqua-3d", type: "fill-extrusion", source: "openmaptiles", "source-layer": "building", minzoom: 13.5,
     paint: {
-      "fill-extrusion-color": dark ? ["interpolate", ["linear"], ["coalesce", ["get", "render_height"], 6], 0, "#1c2b4d", 30, "#2a3f6e", 80, "#3b5a95"] : ["interpolate", ["linear"], ["coalesce", ["get", "render_height"], 6], 0, "#dfe7f1", 30, "#c9d7e8", 80, "#a9c2de"],
+      "fill-extrusion-color": dark ? ["interpolate", ["linear"], ["coalesce", ["get", "render_height"], 6], 0, "#1c2b4d", 30, "#2a3f6e", 80, "#3b5a95"] : ["interpolate", ["linear"], ["coalesce", ["get", "render_height"], 6], 0, "#dcefff", 30, "#b9ddfa", 80, "#8fc6f2"],
       // Buildings without height data get a modest 6m default so they still read as 3D (visual fallback only).
       "fill-extrusion-height": ["interpolate", ["linear"], ["zoom"], 13.5, 0, 15, ["coalesce", ["get", "render_height"], 6]],
       "fill-extrusion-base": ["interpolate", ["linear"], ["zoom"], 13.5, 0, 15, ["coalesce", ["get", "render_min_height"], 0]],
-      "fill-extrusion-opacity": dark ? 0.85 : 0.75,
+      "fill-extrusion-opacity": dark ? 0.85 : 0.82,
       "fill-extrusion-vertical-gradient": true,
     },
   }, labelLayer);
@@ -208,7 +208,7 @@ export function CampusMap({ theme, markers, selectedId, onSelect, show3d, transi
       div.title = m.title;
       const root = createRoot(div);
       const Icon = meta.icon;
-      root.render(<Icon aria-hidden />);
+      root.render(<><span className="shine" aria-hidden /><Icon aria-hidden /></>);
       const onClick = (e: Event) => { e.stopPropagation(); onSelectRef.current(m); };
       div.addEventListener("click", onClick);
       div.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSelectRef.current(m); } });

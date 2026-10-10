@@ -9,12 +9,12 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        primary: "bg-carolina text-white shadow-[0_6px_16px_-8px_rgba(75,156,211,0.9)] hover:brightness-110",
+        primary: "btn-aero text-white",
         secondary: "bg-bg-elev text-fg border border-border hover:border-border-strong hover:bg-carolina-soft/40 shadow-sm",
         ghost: "text-fg-muted hover:text-fg hover:bg-fg/5",
         glass: "glass text-fg hover:bg-carolina-soft/40",
         danger: "bg-red text-white hover:brightness-110",
-        mint: "bg-mint text-white shadow-[0_6px_16px_-8px_rgba(47,191,143,0.9)] hover:brightness-110",
+        mint: "btn-grass text-white",
         link: "text-carolina underline-offset-4 hover:underline px-0 h-auto",
       },
       size: {
