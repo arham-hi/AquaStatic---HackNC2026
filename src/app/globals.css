@@ -1,0 +1,192 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+/* ---------- Design tokens ---------- */
+:root {
+  --bg: #f3f7fb;
+  --bg-elev: #ffffff;
+  --surface: rgba(255, 255, 255, 0.78);
+  --surface-strong: rgba(255, 255, 255, 0.94);
+  --fg: #0f1b2d;
+  --fg-muted: #5b6b85;
+  --fg-faint: #8a98b0;
+  --border: rgba(15, 27, 45, 0.09);
+  --border-strong: rgba(15, 27, 45, 0.16);
+  --carolina: #4b9cd3;
+  --carolina-deep: #13294b;
+  --carolina-soft: #d9ecf8;
+  --sky: #7bafd4;
+  --cyan: #22d3ee;
+  --mint: #2fbf8f;
+  --mint-soft: #d9f5ea;
+  --amber: #f0a21b;
+  --amber-soft: #fdf0d5;
+  --red: #e5484d;
+  --red-soft: #fde2e3;
+  --violet: #8b5cf6;
+  --shadow-sm: 0 1px 2px rgba(15, 27, 45, 0.06), 0 1px 1px rgba(15, 27, 45, 0.04);
+  --shadow-md: 0 8px 24px -12px rgba(15, 27, 45, 0.25), 0 2px 6px rgba(15, 27, 45, 0.06);
+  --shadow-lg: 0 24px 60px -24px rgba(15, 27, 45, 0.35), 0 6px 16px -8px rgba(15, 27, 45, 0.12);
+  --ring: rgba(75, 156, 211, 0.45);
+  --radius: 16px;
+  color-scheme: light;
+}
+
+[data-theme="dark"] {
+  --bg: #0b1426;
+  --bg-elev: #111c33;
+  --surface: rgba(17, 28, 51, 0.72);
+  --surface-strong: rgba(17, 28, 51, 0.94);
+  --fg: #e8eef8;
+  --fg-muted: #9db0cc;
+  --fg-faint: #6f84a6;
+  --border: rgba(255, 255, 255, 0.08);
+  --border-strong: rgba(255, 255, 255, 0.16);
+  --carolina: #62b0e3;
+  --carolina-deep: #e8eef8;
+  --carolina-soft: rgba(75, 156, 211, 0.18);
+  --mint-soft: rgba(47, 191, 143, 0.18);
+  --amber-soft: rgba(240, 162, 27, 0.18);
+  --red-soft: rgba(229, 72, 77, 0.2);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 10px 30px -12px rgba(0, 0, 0, 0.6), 0 2px 6px rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 30px 70px -24px rgba(0, 0, 0, 0.7), 0 8px 20px -8px rgba(0, 0, 0, 0.4);
+  --ring: rgba(98, 176, 227, 0.5);
+  color-scheme: dark;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-bg-elev: var(--bg-elev);
+  --color-fg: var(--fg);
+  --color-fg-muted: var(--fg-muted);
+  --color-fg-faint: var(--fg-faint);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-carolina: var(--carolina);
+  --color-carolina-deep: var(--carolina-deep);
+  --color-carolina-soft: var(--carolina-soft);
+  --color-sky: var(--sky);
+  --color-cyan: var(--cyan);
+  --color-mint: var(--mint);
+  --color-mint-soft: var(--mint-soft);
+  --color-amber: var(--amber);
+  --color-amber-soft: var(--amber-soft);
+  --color-red: var(--red);
+  --color-red-soft: var(--red-soft);
+  --color-violet: var(--violet);
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, "SF Mono", Menlo, monospace;
+  --radius-xl: 16px;
+  --radius-2xl: 22px;
+  --shadow-sm: var(--shadow-sm);
+  --shadow-md: var(--shadow-md);
+  --shadow-lg: var(--shadow-lg);
+}
+
+/* ---------- Base ---------- */
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-sans);
+  font-feature-settings: "cv11", "ss01", "liga";
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  overflow-x: hidden;
+}
+::selection { background: rgba(75, 156, 211, 0.3); }
+:focus-visible { outline: 2px solid var(--carolina); outline-offset: 2px; border-radius: 6px; }
+button, input, select, textarea { font: inherit; color: inherit; }
+a { color: inherit; text-decoration: none; }
+
+/* subtle aero background */
+.aero-bg {
+  background:
+    radial-gradient(1200px 600px at 10% -10%, rgba(75, 156, 211, 0.18), transparent 60%),
+    radial-gradient(900px 500px at 100% 0%, rgba(47, 191, 143, 0.10), transparent 55%),
+    var(--bg);
+}
+[data-theme="dark"] .aero-bg {
+  background:
+    radial-gradient(1200px 600px at 10% -10%, rgba(75, 156, 211, 0.16), transparent 60%),
+    radial-gradient(900px 500px at 100% 0%, rgba(34, 211, 238, 0.07), transparent 55%),
+    var(--bg);
+}
+
+/* ---------- Glass ---------- */
+.glass {
+  background: var(--surface);
+  backdrop-filter: saturate(160%) blur(14px);
+  -webkit-backdrop-filter: saturate(160%) blur(14px);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-md);
+}
+.glass-strong {
+  background: var(--surface-strong);
+  backdrop-filter: saturate(160%) blur(18px);
+  -webkit-backdrop-filter: saturate(160%) blur(18px);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-lg);
+}
+.card {
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+}
+.hairline { border-color: var(--border); }
+.text-balance { text-wrap: balance; }
+.scrollbar-thin { scrollbar-width: thin; scrollbar-color: var(--border-strong) transparent; }
+.scrollbar-thin::-webkit-scrollbar { width: 8px; height: 8px; }
+.scrollbar-thin::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 8px; }
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { scrollbar-width: none; }
+
+/* ---------- Motion ---------- */
+@keyframes rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@keyframes pop { 0% { transform: scale(0.6); opacity: 0; } 70% { transform: scale(1.08); opacity: 1; } 100% { transform: scale(1); } }
+@keyframes pulse-ring { 0% { transform: scale(0.8); opacity: 0.8; } 100% { transform: scale(2.4); opacity: 0; } }
+@keyframes shimmer { 0% { background-position: -400px 0; } 100% { background-position: 400px 0; } }
+@keyframes dash { to { stroke-dashoffset: -40; } }
+.animate-rise { animation: rise 0.35s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+.animate-pop { animation: pop 0.45s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+.skeleton {
+  background: linear-gradient(90deg, var(--border) 25%, var(--border-strong) 37%, var(--border) 63%);
+  background-size: 800px 100%;
+  animation: shimmer 1.4s linear infinite;
+  border-radius: 8px;
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
+}
+
+/* ---------- Map ---------- */
+/* maplibre-gl.css is unlayered and sets position: relative; this rule (higher specificity) keeps the home map filling its parent. */
+.maplibregl-map.aqua-map { position: absolute !important; inset: 0; width: auto; height: auto; }
+.maplibregl-ctrl-attrib { font-size: 10px; background: var(--surface) !important; color: var(--fg-muted) !important; backdrop-filter: blur(8px); border-radius: 8px 0 0 0; }
+.maplibregl-ctrl-attrib a { color: var(--fg-muted) !important; }
+.maplibregl-popup-content { background: transparent; box-shadow: none; padding: 0; }
+.maplibregl-popup-tip { display: none; }
+.marker-wrap { width: 34px; height: 34px; }
+.marker-wrap:hover, .marker-wrap:focus-within { z-index: 10; }
+.marker {
+  width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; cursor: pointer;
+  color: #fff; border: 2px solid rgba(255,255,255,0.9); box-shadow: 0 6px 16px -6px rgba(0,0,0,0.5), 0 0 0 0 rgba(0,0,0,0);
+  transition: transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 0.2s; position: relative; will-change: transform;
+}
+.marker:hover, .marker[data-selected="true"] { transform: scale(1.18); }
+.marker[data-selected="true"] { box-shadow: 0 10px 24px -8px rgba(0,0,0,0.6), 0 0 0 6px var(--ring); }
+.marker[data-new="true"] { animation: pop 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+.marker[data-urgent="true"]::after {
+  content: ""; position: absolute; inset: -2px; border-radius: 50%; border: 2px solid currentColor; animation: pulse-ring 1.6s ease-out infinite;
+}
+.marker[data-demo="true"]::before {
+  content: "DEMO"; position: absolute; top: -9px; right: -14px; font-size: 8px; font-weight: 800; letter-spacing: 0.04em; padding: 1px 4px; border-radius: 6px;
+  background: var(--amber); color: #1a1200; border: 1px solid rgba(255,255,255,0.8);
+}
+.marker svg { width: 16px; height: 16px; }
+.marker-glow { animation: pulse-ring 1.2s ease-out 3; }
