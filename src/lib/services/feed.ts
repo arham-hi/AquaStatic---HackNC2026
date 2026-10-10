@@ -3,7 +3,7 @@
 import { inArray } from "drizzle-orm";
 import { getDb, schema } from "@/lib/db/client";
 import { getLocation, distanceMeters } from "@/lib/locations";
-import { startOfCampusDay, endOfCampusDay, HOUR } from "@/lib/time";
+import { startOfCampusDay, endOfCampusDay, HOUR, DAY } from "@/lib/time";
 import { listPosts, sweepExpirations } from "./posts";
 import { listExternalItems, refreshIfStale } from "./sources";
 import { SOURCE_DEFS } from "@/lib/sources/adapters";
@@ -134,7 +134,8 @@ export function listFeed(qy: FeedQuery = {}, now = Date.now()): { items: FeedIte
   }
 
   // Sort: urgent alerts first, then community posts by recency interleaved with soonest events.
-  const rank = (it: FeedItem) => (it.type === "alert" ? 0 : it.kind === "post" ? 1 : 2);
+  // Fresh alerts first, then community posts, then everything else. Old alerts fall back into the stream.
+  const rank = (it: FeedItem) => (it.type === "alert" && it.at > now - 2 * DAY ? 0 : it.kind === "post" ? 1 : 2);
   items.sort((a, b) => rank(a) - rank(b) || (a.kind === "external" && a.type === "event" && b.kind === "external" && b.type === "event" ? a.at - b.at : b.at - a.at));
 
   const total = items.length;

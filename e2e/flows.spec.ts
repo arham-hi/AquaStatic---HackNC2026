@@ -25,7 +25,7 @@ test("homepage loads the 3D map with demo markers and live counts", async ({ pag
 test("navigates major pages without errors", async ({ page }) => {
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(e.message));
-  for (const [path, heading] of [["/discover", "Discover"], ["/connect", "Connect"], ["/radio", "Aqua Static Radio"], ["/transit", "Transit"], ["/messages", "Messages"], ["/notifications", "Notifications"], ["/profile", "Profile"], ["/developer", "Demo & integrations"]]) {
+  for (const [path, heading] of [["/connect", "Connect"], ["/radio", "Aqua Static Radio"], ["/transit", "Transit"], ["/messages", "Messages"], ["/notifications", "Notifications"], ["/profile", "Profile"], ["/developer", "Demo & integrations"]]) {
     await page.goto(path);
     await expect(page.getByRole("heading", { level: 1, name: new RegExp(heading) })).toBeVisible();
   }
@@ -61,24 +61,22 @@ test("two users: request → offer → match → accept both → chat → comple
   await pj.getByRole("button", { name: "Publish" }).click();
   await expect(pj.getByText(/We found 1 possible match/)).toBeVisible({ timeout: 15000 });
 
-  // Both see the suggested match and accept.
-  await pj.getByRole("tab", { name: /Matches/ }).click();
+  // Both see the suggested match and accept; chat opens in a sheet.
   await expect(pj.getByText("Potential match").first()).toBeVisible({ timeout: 15000 });
   await pj.getByRole("button", { name: "Accept" }).first().click();
   await expect(pj.getByText(/You accepted/)).toBeVisible();
 
-  await pm.goto("/connect?tab=matches");
-  await pm.getByRole("tab", { name: /Matches/ }).click();
+  await pm.goto("/connect");
   await expect(pm.getByText(/already accepted/)).toBeVisible({ timeout: 15000 });
   await pm.getByRole("button", { name: "Accept" }).first().click();
-  await pm.waitForURL(/\/messages\//, { timeout: 15000 });
+  await expect(pm.getByRole("dialog", { name: "Chat" })).toBeVisible({ timeout: 15000 });
 
   // Chat.
   await pm.getByPlaceholder(/message/i).fill("Hey Jordan! 3rd floor by the windows.");
   await pm.keyboard.press("Enter");
   await expect(pm.getByText("Hey Jordan! 3rd floor by the windows.")).toBeVisible();
-  await pj.goto("/messages");
-  await pj.getByText(/Maya/).first().click();
+  await pj.goto("/connect");
+  await pj.getByRole("button", { name: "Open chat" }).first().click();
   await expect(pj.getByText("Hey Jordan! 3rd floor by the windows.")).toBeVisible({ timeout: 15000 });
   await pj.getByPlaceholder(/message/i).fill("On my way up.");
   await pj.keyboard.press("Enter");
@@ -114,13 +112,12 @@ test("transit page shows schedule data or a labeled demo overlay with the offici
   await expect(page.locator("canvas.maplibregl-canvas")).toBeVisible({ timeout: 30000 });
 });
 
-test("discover feed: filter, save, find in saved", async ({ page }) => {
-  await page.goto("/discover");
-  await page.getByRole("button", { name: "Help requests" }).click();
+test("connect stream: filter to help, open a card, save it", async ({ page }) => {
+  await page.goto("/connect");
+  await page.getByRole("button", { name: "Help", exact: true }).click();
   const first = page.locator("article").first();
   await expect(first).toBeVisible({ timeout: 15000 });
-  await first.getByRole("button", { name: /^Save$/ }).click();
+  await first.click();
+  await page.getByRole("dialog").getByRole("button", { name: /^Save$/ }).click();
   await expect(page.getByText("Saved", { exact: true }).first()).toBeVisible();
-  await page.getByRole("button", { name: /^Saved/ }).first().click(); // header filter button (cards also say "Saved")
-  await expect(page.locator("article").first()).toBeVisible();
 });

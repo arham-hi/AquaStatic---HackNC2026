@@ -1,8 +1,8 @@
-import { Suspense } from "react";
-import { DiscoverPage } from "@/components/feed/discover-page";
+import { redirect } from "next/navigation";
 
-export const metadata = { title: "Discover" };
-
-export default function Discover() {
-  return <Suspense fallback={null}><DiscoverPage /></Suspense>;
+// Discover merged into Connect. Keep old links working.
+export default async function Discover({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+  const sp = await searchParams;
+  const q = typeof sp.q === "string" && sp.q ? `?q=${encodeURIComponent(sp.q)}` : typeof sp.item === "string" ? `?item=${encodeURIComponent(sp.item)}` : "";
+  redirect(`/connect${q}`);
 }

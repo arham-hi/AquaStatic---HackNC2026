@@ -76,9 +76,6 @@ export function PostDetail({ item, onClose, className }: { item: FeedItem; onClo
             <Badge tone={post.urgency === "urgent" ? "red" : post.urgency === "soon" ? "amber" : "neutral"}>urgency: {post.urgency}</Badge>
             {post.attributes.item && <Badge tone="carolina">item: {post.attributes.item}</Badge>}
             {post.attributes.subject && <Badge tone="violet">subject: {post.attributes.subject}</Badge>}
-            {post.attributes.powerClass && <Badge>{post.attributes.powerClass}-class power</Badge>}
-            {post.attributes.durationMinutes && <Badge>~{post.attributes.durationMinutes} min</Badge>}
-            {post.keywords.slice(0, 5).map((k) => <Badge key={k} className="bg-transparent border border-border">{k}</Badge>)}
           </div>
           {data && data.matchCount > 0 && <div className="mt-2 text-xs text-mint flex items-center gap-1"><HeartHandshake className="size-3.5" /> {data.matchCount} match suggestion{data.matchCount > 1 ? "s" : ""}</div>}
         </div>

@@ -19,7 +19,7 @@ type Data = { conversation: ConversationView; messages: Msg[]; match: MatchView 
 
 const STATUS_TONE: Record<string, "neutral" | "carolina" | "mint" | "amber" | "red"> = { suggested: "amber", accepted: "carolina", completed: "mint", declined: "red", cancelled: "neutral" };
 
-export function ConversationThread({ id }: { id: string }) {
+export function ConversationThread({ id, embedded }: { id: string; embedded?: boolean }) {
   const live = useLive<Data>(`/api/conversations/${id}`, { interval: 2500, scopes: ["messages", "matches"] });
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
@@ -81,7 +81,7 @@ export function ConversationThread({ id }: { id: string }) {
   let lastDay = "";
 
   return (
-    <div className="mx-auto max-w-3xl px-4 sm:px-6 py-4 flex flex-col h-[calc(100dvh-64px-96px)] md:h-[calc(100dvh-64px-40px)]">
+    <div className={embedded ? "flex flex-col h-full min-h-0 px-4 py-3" : "mx-auto max-w-3xl px-4 sm:px-6 py-4 flex flex-col h-[calc(100dvh-64px-96px)] md:h-[calc(100dvh-64px-40px)]"}>
       <header className="flex items-center gap-3 pb-3">
         <Button asChild variant="ghost" size="icon-sm" aria-label="Back to messages"><Link href="/messages"><ArrowLeft /></Link></Button>
         <Avatar emoji={other?.avatar} name={other?.displayName} size={40} />
