@@ -197,7 +197,7 @@ export function CampusMap({ theme, markers, selectedId, onSelect, show3d, transi
       wrap.appendChild(div);
       div.className = "marker";
       div.style.background = meta.color;
-      div.style.color = meta.color;
+      div.style.setProperty("--pin", meta.color);
       div.dataset.selected = String(selectedId === m.id);
       div.dataset.urgent = String(m.urgency === "urgent");
       div.dataset.demo = String(m.isDemo);

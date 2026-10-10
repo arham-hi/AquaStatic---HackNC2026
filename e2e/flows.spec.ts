@@ -19,7 +19,7 @@ test("homepage loads the 3D map with demo markers and live counts", async ({ pag
   await expect(page.locator("canvas.maplibregl-canvas")).toBeVisible({ timeout: 30000 });
   await expect(page.locator(".marker").first()).toBeVisible({ timeout: 30000 });
   expect(await page.locator(".marker").count()).toBeGreaterThan(5);
-  await expect(page.getByText("Around campus")).toBeVisible();
+  await expect(page.getByText(/happening on campus right now/)).toBeVisible();
 });
 
 test("navigates major pages without errors", async ({ page }) => {
