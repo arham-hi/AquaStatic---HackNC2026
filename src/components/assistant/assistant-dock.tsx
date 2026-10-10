@@ -66,7 +66,7 @@ export function AssistantDock() {
         {turns.map((t, i) => (
           <div key={i} className={cn("flex", t.role === "user" ? "justify-end" : "justify-start")}>
             <div className={cn("max-w-[92%] rounded-2xl px-3.5 py-2.5 text-sm whitespace-pre-wrap leading-relaxed", t.role === "user" ? "bg-carolina text-white rounded-br-md" : "bg-bg-elev border border-border rounded-bl-md")}>
-              {t.pending ? <span className="inline-flex gap-1 py-1" aria-label="Thinking"><i className="size-1.5 rounded-full bg-fg-faint animate-bounce" /><i className="size-1.5 rounded-full bg-fg-faint animate-bounce [animation-delay:120ms]" /><i className="size-1.5 rounded-full bg-fg-faint animate-bounce [animation-delay:240ms]" /></span> : t.text}
+              {t.pending ? <span className="inline-flex gap-1 py-1" aria-label="Thinking"><i className="size-1.5 rounded-full bg-fg-faint animate-pulse" /><i className="size-1.5 rounded-full bg-fg-faint animate-pulse [animation-delay:200ms]" /><i className="size-1.5 rounded-full bg-fg-faint animate-pulse [animation-delay:400ms]" /></span> : t.text}
               {t.reply && (
                 <div className="mt-2.5 space-y-2">
                   {t.reply.sources.length > 0 && (
