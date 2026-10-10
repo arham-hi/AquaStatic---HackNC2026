@@ -25,7 +25,7 @@ test("homepage loads the 3D map with demo markers and live counts", async ({ pag
 test("navigates major pages without errors", async ({ page }) => {
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(e.message));
-  for (const [path, heading] of [["/connect", "Connect"], ["/radio", "Aqua Static Radio"], ["/transit", "Transit"], ["/messages", "Messages"], ["/notifications", "Notifications"], ["/profile", "Profile"], ["/developer", "Demo & integrations"]]) {
+  for (const [path, heading] of [["/connect", "Connect"], ["/radio", "Aqua Static Radio"], ["/transit", "Bus"], ["/messages", "Messages"], ["/notifications", "Notifications"], ["/profile", "Profile"], ["/developer", "Demo & integrations"]]) {
     await page.goto(path);
     await expect(page.getByRole("heading", { level: 1, name: new RegExp(heading) })).toBeVisible();
   }

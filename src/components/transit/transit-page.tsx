@@ -7,7 +7,7 @@ import { useLive } from "@/hooks/useLive";
 import { useUI } from "@/components/shell/providers";
 import type { TransitData, TransitStop } from "@/lib/services/transit";
 import type { Post } from "@/lib/db/schema";
-import { Badge, EmptyState, Skeleton } from "@/components/ui/primitives";
+import { EmptyState, Skeleton } from "@/components/ui/primitives";
 import { Button } from "@/components/ui/button";
 import { timeAgo } from "@/lib/time";
 import { cn } from "@/lib/utils";
@@ -53,21 +53,10 @@ export function TransitPage() {
 
   return (
     <div className="flex flex-col gap-5">
-      <div className={cn("glass rounded-2xl px-4 py-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm", demo && "bg-amber-soft text-amber border-amber/40")}>
-        {demo ? (
-          <span className="flex items-center gap-2 font-medium"><AlertTriangle className="size-4 shrink-0" /> DEMO overlay — approximate geometry, not a real schedule</span>
-        ) : (
-          <span className="flex flex-wrap items-center gap-x-2 gap-y-1 text-fg-muted">
-            <Bus className="size-4 text-carolina shrink-0" aria-hidden />
-            <span className="font-medium text-fg">{data.agency}</span> · schedule data (GTFS) · feed: <span className="font-mono text-xs">{data.feedVersion}</span> · updated {timeAgo(data.fetchedAt)} · {routes.length} routes · {stops.length} stops
-          </span>
-        )}
-        <a href={data.realtime.officialUrl} target="_blank" rel="noopener noreferrer" className="ml-auto max-w-full">
-          <Badge tone={demo ? "amber" : "neutral"} className="h-auto min-h-7 px-3 py-1 gap-1.5 whitespace-normal hover:bg-carolina-soft hover:text-carolina transition-colors">
-            <Radio className="size-3.5 shrink-0" /> Live bus positions: not available here → Open official tracker (mychtransit.org) <ExternalLink className="size-3 shrink-0" />
-          </Badge>
-        </a>
-      </div>
+      <p className={cn("text-sm text-fg-muted flex flex-wrap items-center gap-x-2 gap-y-1", demo && "text-amber")}>
+        {demo ? <><AlertTriangle className="size-4 shrink-0" /> DEMO overlay — approximate geometry, not a real schedule.</> : <><Bus className="size-4 text-carolina shrink-0" aria-hidden /> {routes.length} Chapel Hill Transit routes · schedule data, updated {timeAgo(data.fetchedAt)}.</>}
+        <a href={data.realtime.officialUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-carolina hover:underline"><Radio className="size-3.5" /> Live buses on mychtransit.org <ExternalLink className="size-3" /></a>
+      </p>
 
       <div className="grid gap-4 lg:grid-cols-[360px_minmax(0,1fr)] items-start">
         <div ref={panel} className="glass rounded-2xl p-4 order-2 lg:order-1 min-w-0 scroll-mt-20">
@@ -80,7 +69,7 @@ export function TransitPage() {
         <TransitMap theme={theme} routes={routes} stops={stops} selectedId={selectedId} onSelect={setSelectedId} focus={focus} className={cn("order-1 lg:order-2 min-w-0", MAP_H)} />
       </div>
 
-      <Notices notices={data.notices} />
+      {data.notices.length > 0 && <Notices notices={data.notices} />}
     </div>
   );
 }
