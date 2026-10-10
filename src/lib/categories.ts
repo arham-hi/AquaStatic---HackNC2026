@@ -4,15 +4,15 @@ import {
 } from "lucide-react";
 import type { PostCategory } from "@/lib/db/schema";
 
-export type CategoryMeta = { id: PostCategory; label: string; color: string; icon: LucideIcon; blurb: string };
+export type CategoryMeta = { id: PostCategory; label: string; color: string; icon: LucideIcon; blurb: string; green?: string };
 
 export const CATEGORIES: Record<PostCategory, CategoryMeta> = {
-  borrowing: { id: "borrowing", label: "Borrow & lend", color: "#4b9cd3", icon: Plug, blurb: "Chargers, calculators, umbrellas" },
+  borrowing: { id: "borrowing", label: "Borrow & lend", color: "#4b9cd3", icon: Plug, blurb: "Chargers, calculators, umbrellas", green: "Reuse: borrowed, not bought" },
   tutoring: { id: "tutoring", label: "Tutoring", color: "#8b5cf6", icon: GraduationCap, blurb: "Help with a class" },
   study: { id: "study", label: "Study groups", color: "#6366f1", icon: BookOpen, blurb: "Study together" },
-  lost_found: { id: "lost_found", label: "Lost & found", color: "#f0a21b", icon: Search, blurb: "Lost or found items" },
-  free_food: { id: "free_food", label: "Free food", color: "#2fbf8f", icon: Pizza, blurb: "Giveaways and leftovers" },
-  ride: { id: "ride", label: "Rides", color: "#14b8a6", icon: Car, blurb: "Carpools and lifts" },
+  lost_found: { id: "lost_found", label: "Lost & found", color: "#f0a21b", icon: Search, blurb: "Lost or found items", green: "Reuse: returned, not replaced" },
+  free_food: { id: "free_food", label: "Free food", color: "#2fbf8f", icon: Pizza, blurb: "Giveaways and leftovers", green: "Less waste: eaten, not binned" },
+  ride: { id: "ride", label: "Rides", color: "#14b8a6", icon: Car, blurb: "Carpools and lifts", green: "Shared ride" },
   event: { id: "event", label: "Events", color: "#0ea5e9", icon: CalendarDays, blurb: "Campus happenings" },
   news: { id: "news", label: "News", color: "#64748b", icon: Newspaper, blurb: "Campus and local news" },
   alert: { id: "alert", label: "Alerts", color: "#e5484d", icon: Siren, blurb: "Safety and disruptions" },

@@ -5,7 +5,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { X, MapPin, Clock, ExternalLink, Bookmark, BookmarkCheck, Share2, Flag, Pencil, Trash2, CheckCircle2, Sparkles, HeartHandshake, Hourglass } from "lucide-react";
+import { X, MapPin, Clock, ExternalLink, Bookmark, BookmarkCheck, Share2, Flag, Pencil, Trash2, CheckCircle2, Sparkles, HeartHandshake, Hourglass, Bus } from "lucide-react";
 import { useLive } from "@/hooks/useLive";
 import { api } from "@/lib/client";
 import { useSession, useUI } from "@/components/shell/providers";
@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Badge, Skeleton, Dialog, DialogContent, Textarea, Input, Chip } from "@/components/ui/primitives";
 import { categoryMeta } from "@/lib/categories";
 import { fmtDateTime, timeAgo, timeUntil } from "@/lib/time";
-import { TrustBadge, TypeBadge, shareItem, useSaveToggle } from "@/components/feed/feed-card";
+import { TrustBadge, TypeBadge, GreenBadge, shareItem, useSaveToggle } from "@/components/feed/feed-card";
 import { LocationPicker } from "./location-picker";
 import type { FeedItem } from "@/lib/services/feed";
 import type { Post } from "@/lib/db/schema";
@@ -31,6 +31,7 @@ export function PostDetail({ item, onClose, className }: { item: FeedItem; onClo
   const [saved, setSaved] = useState<boolean>((item as FeedItem & { saved?: boolean }).saved ?? false);
   const [editing, setEditing] = useState(false);
   const [reporting, setReporting] = useState(false);
+  const nearest = useLive<{ stop: { name: string; code: string; meters: number; routes: string[] } | null; demo: boolean }>(item.lat != null && item.lng != null ? `/api/transit/nearest?lat=${item.lat}&lng=${item.lng}` : null, { interval: 600_000 });
 
   const live = data?.item ?? item;
   const post = data?.post;
@@ -47,7 +48,7 @@ export function PostDetail({ item, onClose, className }: { item: FeedItem; onClo
       <div className="flex items-start gap-3">
         <div className="grid size-11 place-items-center rounded-xl text-white shrink-0" style={{ background: meta.color }}><Icon className="size-5" /></div>
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-1.5 flex-wrap mb-1"><TypeBadge type={live.type} /><TrustBadge item={live} />{post && post.status !== "open" && <Badge tone={post.status === "matched" || post.status === "fulfilled" || post.status === "resolved" ? "mint" : "neutral"}>{post.status.replace("_", " ")}</Badge>}</div>
+          <div className="flex items-center gap-1.5 flex-wrap mb-1"><TypeBadge type={live.type} /><TrustBadge item={live} /><GreenBadge category={live.category} />{post && post.status !== "open" && <Badge tone={post.status === "matched" || post.status === "fulfilled" || post.status === "resolved" ? "mint" : "neutral"}>{post.status.replace("_", " ")}</Badge>}</div>
           <h2 className="text-lg font-semibold leading-tight text-balance">{live.title}</h2>
         </div>
         {onClose && <button type="button" onClick={onClose} aria-label="Close" className="grid size-8 place-items-center rounded-lg text-fg-muted hover:bg-fg/5 shrink-0"><X className="size-4" /></button>}
@@ -64,6 +65,7 @@ export function PostDetail({ item, onClose, className }: { item: FeedItem; onClo
         <dd>{live.startsAt && live.startsAt > Date.now() ? fmtDateTime(live.startsAt) : `${timeAgo(live.at)} · ${fmtDateTime(live.at)}`}{live.endsAt ? ` → ${fmtDateTime(live.endsAt)}` : ""}</dd>
         {(live.locationName || post?.locationNote) && (<><dt className="text-fg-faint flex items-center gap-1"><MapPin className="size-3.5" />Where</dt><dd>{live.locationName}{post?.locationNote ? ` · ${post.locationNote}` : ""}</dd></>)}
         {live.expiresAt && isPost && (<><dt className="text-fg-faint flex items-center gap-1"><Hourglass className="size-3.5" />Expires</dt><dd>{timeUntil(live.expiresAt)} · {fmtDateTime(live.expiresAt)}</dd></>)}
+        {nearest.data?.stop && !nearest.data.demo && (<><dt className="text-fg-faint flex items-center gap-1"><Bus className="size-3.5" />Bus</dt><dd className="truncate">{nearest.data.stop.name} · {nearest.data.stop.meters} m{nearest.data.stop.routes.length ? ` · ${nearest.data.stop.routes.join(", ")}` : ""} · <Link href="/transit" className="text-carolina hover:underline">routes</Link></dd></>)}
         <dt className="text-fg-faint">Source</dt>
         <dd className="truncate">{isPost ? (data?.author ? `${data.author.avatar} ${data.author.displayName}` : loading ? <Skeleton className="w-24 inline-block" /> : "Community") : live.sourceLabel}</dd>
       </dl>

@@ -1,5 +1,7 @@
 # Aqua Static — Your campus. In real time.
 
+Aqua Static reimagines the connected, optimistic future that Frutiger Aero promised: a world where digital systems bring people closer together and make the physical places we share better.
+
 A live, AI-powered coordination layer for UNC-Chapel Hill. Student updates, official campus feeds, transit and peer needs land on one **3D map of Chapel Hill**, get matched by a real **matching engine**, and are narrated by a personalized **AI radio station**. Built for HackNC 2026.
 
 Runs with **zero API keys**: a persistent local SQLite database, deterministic AI fallbacks, and five real public campus feeds.

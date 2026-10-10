@@ -179,10 +179,22 @@ export function sweepExpirations(now = Date.now()) {
   return res.changes;
 }
 
+export const REUSE_CATEGORIES = ["borrowing", "lost_found", "ride", "free_food"] as const;
+
+/** Completed connections that kept an existing item in use (borrowed, returned, shared, eaten instead of binned). A count, never a savings claim. */
+export function sharedCount(): number {
+  const db = getDb();
+  const rows = db.select({ c: sql<number>`count(*)` }).from(schema.matches)
+    .innerJoin(schema.posts, eq(schema.posts.id, schema.matches.requestPostId))
+    .where(and(eq(schema.matches.status, "completed"), inArray(schema.posts.category, [...REUSE_CATEGORIES]))).get();
+  return rows?.c ?? 0;
+}
+
 export function activityCounts(now = Date.now()) {
   const live = listPosts({ status: ["open", "matched", "in_progress"] }, now);
   const since = now - 24 * HOUR;
   return {
+    shared: sharedCount(),
     live: live.length,
     requests: live.filter((p) => p.type === "request").length,
     offers: live.filter((p) => p.type === "offer").length,

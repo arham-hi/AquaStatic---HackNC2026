@@ -1,7 +1,7 @@
 "use client";
 
 import { toast } from "sonner";
-import { Clock, MapPin } from "lucide-react";
+import { Clock, MapPin, Leaf } from "lucide-react";
 import { categoryMeta, TYPE_META } from "@/lib/categories";
 import { fmtDateTime, timeAgo } from "@/lib/time";
 import { api } from "@/lib/client";
@@ -17,6 +17,11 @@ export function TrustBadge({ item }: { item: Pick<FeedItem, "trust" | "sourceSta
   if (item.trust === "demo") return <Badge tone="amber">DEMO</Badge>;
   if (item.trust === "official") return <Badge tone="mint">{item.sourceLabel}</Badge>;
   return null;
+}
+
+export function GreenBadge({ category }: { category: string }) {
+  const g = categoryMeta(category).green;
+  return g ? <Badge tone="mint" title={g}><Leaf className="size-3" />{g.split(":")[0]}</Badge> : null;
 }
 
 export function TypeBadge({ type }: { type: string }) {
@@ -57,7 +62,7 @@ export function FeedCard({ item, onSelect, selected, compact }: { item: FeedItem
       className={cn("card flex items-start gap-3 cursor-pointer transition-shadow hover:shadow-md", compact ? "p-3" : "p-4", selected && "ring-2 ring-carolina/50", item.type === "alert" && item.urgency === "urgent" && "border-red/40")}>
       <div className="shrink-0 grid size-10 place-items-center rounded-xl text-white" style={{ background: meta.color }}><Icon className="size-5" /></div>
       <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-1.5 mb-1"><TypeBadge type={item.type} /><TrustBadge item={item} /></div>
+        <div className="flex items-center gap-1.5 mb-1 flex-wrap"><TypeBadge type={item.type} /><TrustBadge item={item} /><GreenBadge category={item.category} /></div>
         <h3 className={cn("font-semibold leading-snug", compact ? "text-sm" : "text-[15px]")}>{item.title}</h3>
         {!compact && item.summary && item.summary !== item.title && <p className="text-sm text-fg-muted mt-1 line-clamp-1">{item.summary}</p>}
         <div className="mt-1.5 flex items-center gap-3 text-xs text-fg-faint">

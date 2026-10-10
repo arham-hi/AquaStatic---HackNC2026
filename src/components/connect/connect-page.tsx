@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
-import { HeartHandshake, Plus, Check, X, MessageSquare, CheckCircle2, Search as SearchIcon, Gift, HandHelping, MapPin } from "lucide-react";
+import { HeartHandshake, Plus, Check, X, MessageSquare, CheckCircle2, Search as SearchIcon, Gift, HandHelping, MapPin, Leaf } from "lucide-react";
 import { useLive } from "@/hooks/useLive";
 import { api } from "@/lib/client";
 import { useSession, useUI } from "@/components/shell/providers";
@@ -40,6 +40,8 @@ export function ConnectPage() {
   const feedUrl = useMemo(() => `/api/feed?filter=${scope === "events" ? "events" : "all"}&window=recent&limit=${limit}${q ? `&q=${encodeURIComponent(q)}` : ""}`, [scope, q, limit]);
   const feed = useLive<FeedResp>(feedUrl, { interval: 5000, scopes: ["posts", "matches", "sources"] });
   const matches = useLive<{ matches: MatchView[] }>(user ? "/api/matches" : null, { interval: 3000, scopes: ["matches", "posts", "messages"] });
+  const sync = useLive<{ counts: { shared: number } }>("/api/sync", { interval: 6000, scopes: ["matches"] });
+  const shared = sync.data?.counts.shared ?? 0;
 
   const items = useMemo(() => (feed.data?.items ?? []).filter((i) => scope !== "help" || i.type === "request" || i.type === "offer"), [feed.data, scope]);
   const mine = (matches.data?.matches ?? []).filter((m) => m.status !== "declined" && m.status !== "cancelled");
@@ -69,6 +71,7 @@ export function ConnectPage() {
     <Page title="Connect" subtitle="What's happening, who needs a hand, and who can help."
       actions={<><Button variant="secondary" onClick={() => openCreate("I have ")}><Gift /> Offer help</Button><Button onClick={() => openCreate("I need ")}><HandHelping /> Request help</Button></>}>
       <div className="mx-auto max-w-2xl space-y-6">
+        <p className="flex items-center gap-2 text-sm text-mint"><Leaf className="size-4" />{shared === 0 ? "Every completed borrow or return here keeps an item in use instead of buying new." : `${shared} ${shared === 1 ? "item" : "items"} kept in use through Aqua Static so far.`}</p>
         {mine.length > 0 && (
           <section className="space-y-3">
             <h2 className="text-sm font-semibold text-fg-muted">Your matches</h2>

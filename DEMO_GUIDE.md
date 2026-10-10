@@ -41,7 +41,7 @@ Click **Generate Campus Radio** (Campus Radio, medium). Press **play**. The brie
 ### 2:55 — Transit, close
 Open **Transit**: 22 real Chapel Hill Transit routes from the GTFS feed; click **U** or **RU**; show the official tracker link ("we never fake live buses"). Back to the map: everything is still there.
 
-> "Living map. Intelligent connections. A personalized media layer. One shared, real-time system — built in a weekend."
+> "Aqua Static reimagines the connected, optimistic future Frutiger Aero promised: digital systems that bring people closer and make the places we share better. Every charger borrowed here is one not bought. Living map, intelligent connections, a personalized media layer — one shared, real-time system, built in a weekend."
 
 ---
 
