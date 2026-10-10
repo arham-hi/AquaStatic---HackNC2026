@@ -56,7 +56,7 @@ Copy `.env.example` to `.env`. Everything is optional for local use.
 | `TRANSIT_GTFS_URL` | Chapel Hill Transit GTFS zip | verified default |
 
 ### Adding Gemini
-Set `GEMINI_API_KEY` (and optionally `GEMINI_MODEL`, default `gemini-2.5-flash`). Restart. The `/developer` page's "Run live probe" validates the key. Parsing, assistant answers, event classification and briefing scripts switch to Gemini automatically; every output is validated with Zod and locations are checked against the campus registry before anything is saved.
+Set `GEMINI_API_KEY` (and optionally `GEMINI_MODEL`, default `gemini-3.8-flash`). Restart. The `/developer` page's "Run live probe" validates the key. Parsing, assistant answers, event classification and briefing scripts switch to Gemini automatically; every output is validated with Zod and locations are checked against the campus registry before anything is saved.
 
 ### Adding ElevenLabs
 Set `ELEVENLABS_API_KEY` (and a `ELEVENLABS_VOICE_ID`). Radio requests `/api/briefings/:id/audio`, which synthesizes once and caches the MP3 under `data/audio/`. Without a key the route returns 503 and the player uses the browser voice.
