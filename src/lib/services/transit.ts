@@ -22,7 +22,7 @@ export type TransitData = {
 export { OFFICIAL_TRACKING_URL, OFFICIAL_ROUTES_URL } from "@/lib/constants";
 import { OFFICIAL_TRACKING_URL, OFFICIAL_ROUTES_URL } from "@/lib/constants";
 const TTL = 24 * HOUR;
-const dir = () => path.resolve(process.cwd(), "data", "gtfs");
+const dir = () => path.resolve(process.env.DATA_DIR || path.join(process.cwd(), "data"), "gtfs");
 
 /** Minimal RFC-4180 CSV parser (handles quoted commas and doubled quotes). */
 export function parseCsv(text: string): Record<string, string>[] {

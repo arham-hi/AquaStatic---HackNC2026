@@ -4,7 +4,7 @@ import { env, hasElevenLabs } from "@/lib/env";
 
 // ElevenLabs text-to-speech. Returns MP3 bytes. Cached per briefing on disk so audio scripts never change after generation.
 
-const audioDir = () => path.resolve(process.cwd(), "data", "audio");
+const audioDir = () => path.resolve(process.env.DATA_DIR || path.join(process.cwd(), "data"), "audio");
 
 export class ElevenLabsError extends Error {
   constructor(public status: number, body: string) {
