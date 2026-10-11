@@ -13,5 +13,5 @@ export const POST = route<Ctx>(async (req, ctx) => {
   const rl = rateLimit(`msg:${me.id}`, 40, 60_000);
   if (!rl.ok) throw new ApiError(429, "Slow down a little.");
   const { content } = await parseBody(req, z.object({ content: z.string().trim().min(1).max(2000) }));
-  return json({ message: sendMessage(me, id, content) }, { status: 201 });
+  return json({ message: (await sendMessage(me, id, content)) }, { status: 201 });
 });

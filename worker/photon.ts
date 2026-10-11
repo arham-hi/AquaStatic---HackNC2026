@@ -1,5 +1,5 @@
 // Aqua Static iMessage agent — Photon Spectrum worker.
-// Runs as a separate long-lived process and reuses the web app's services and SQLite database.
+// Runs as a separate long-lived process and reuses the web app's services and PostgreSQL database.
 // Start: npm run worker:photon   (requires SPECTRUM_PROJECT_ID / SPECTRUM_PROJECT_SECRET in .env)
 //
 // Verified against the spectrum-ts docs (photon.codes/docs/spectrum-ts):
@@ -13,10 +13,7 @@ import path from "node:path";
 // Load .env without adding a dependency.
 const envPath = path.resolve(process.cwd(), ".env");
 if (fs.existsSync(envPath)) {
-  for (const line of fs.readFileSync(envPath, "utf8").split(/\r?\n/)) {
-    const m = /^([A-Z0-9_]+)=(.*)$/.exec(line.trim());
-    if (m && !(m[1] in process.env)) process.env[m[1]] = m[2];
-  }
+  process.loadEnvFile(envPath);
 }
 
 async function main() {

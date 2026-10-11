@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 
 /** Lightweight poll target: current change revision + per-user unread count + activity counts. */
 export const GET = route(async () => {
-  sweepExpirations();
+  (await sweepExpirations());
   const me = await currentUser();
-  return json({ rev: revision(), unread: me ? unreadCount(me.id) : 0, counts: activityCounts(), at: Date.now() });
+  return json({ rev: revision(), unread: me ? (await unreadCount(me.id)) : 0, counts: (await activityCounts()), at: Date.now() });
 });

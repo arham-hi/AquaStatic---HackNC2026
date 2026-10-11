@@ -7,6 +7,6 @@ export const dynamic = "force-dynamic";
 export const POST = route(async (req) => {
   requireCronOrDemo(req);
   const results = await refreshAllSources({ force: true });
-  pruneExternal();
-  return json({ results, sources: listSources() });
+  (await pruneExternal());
+  return json({ results, sources: (await listSources()) });
 });

@@ -53,8 +53,8 @@ export function toRecord(it: FeedItem): GroundingRecord {
   };
 }
 
-export function gatherBriefingItems(interests: string[], now = Date.now(), topic?: string) {
-  const { items } = listFeed({ filter: "all", window: "recent", limit: 300, q: topic || undefined }, now);
+export async function gatherBriefingItems(interests: string[], now = Date.now(), topic?: string) {
+  const { items } = (await listFeed({ filter: "all", window: "recent", limit: 300, q: topic || undefined }, now));
   const alerts = items.filter((i) => i.type === "alert");
   const community = items.filter((i) => i.kind === "post" && ["request", "offer"].includes(i.type));
   const events = items.filter((i) => i.type === "event" && (i.startsAt ?? 0) > now - HOUR && (i.startsAt ?? 0) < now + 36 * HOUR);
@@ -67,9 +67,9 @@ export function gatherBriefingItems(interests: string[], now = Date.now(), topic
   return { alerts: pick(alerts, 3), community: pick(community, 6), events: pick(events, 6), news: pick(news, 5), transit: pick(transit, 3) };
 }
 
-type Buckets = ReturnType<typeof gatherBriefingItems>;
+type Buckets = Awaited<ReturnType<typeof gatherBriefingItems>>;
 
-function localScript(format: BriefingFormat, length: "short" | "medium" | "long", b: Buckets, now: number): { title: string; segments: BriefingSegment[] } {
+async function localScript(format: BriefingFormat, length: "short" | "medium" | "long", b: Buckets, now: number): Promise<{ title: string; segments: BriefingSegment[] }> {
   const n = { short: 2, medium: 3, long: 5 }[length];
   const line = (it: FeedItem) => {
     const where = it.locationName && !it.title.includes(it.locationName) ? ` at ${it.locationName}` : "";
@@ -98,7 +98,7 @@ function localScript(format: BriefingFormat, length: "short" | "medium" | "long"
   segs.push({ title: "Upcoming events", text: b.events.length ? `Coming up: ` + b.events.slice(0, n + 1).map(line).join(" ") : "Nothing is on the calendar for the next day and a half yet. Check calendar.unc.edu for the full listing.", refs: refs(b.events.slice(0, n + 1)) });
   segs.push({ title: "Community needs & opportunities", text: b.community.length ? `In the community: ` + b.community.slice(0, n + 2).map(line).join(" ") + (b.community.some((c) => c.type === "request") ? " If you can help, open Connect and accept the match." : "") : "No open requests or offers right now. Be the first to post one in Connect.", refs: refs(b.community.slice(0, n + 2)) });
   if (format !== "flash") segs.push({ title: "Transit", text: b.transit.length ? b.transit.slice(0, n).map(line).join(" ") : "No transit notices are posted. Routes and live bus tracking are on mychtransit dot org.", refs: refs(b.transit.slice(0, n)) });
-  const tallyNow = sharedBreakdown();
+  const tallyNow = (await sharedBreakdown());
   if (tallyNow.total > 0) segs.push({ title: "Kept in use", text: `${tallyNow.total} ${tallyNow.total === 1 ? "thing has" : "things have"} stayed in use through Aqua Static so far: ${sharedSummary(tallyNow)}. Shared, not bought.`, refs: [] });
   segs.push({ title: "Closing", text: format === "letter" ? "That's your Carolina Letter. Post what you see, help who you can, and we'll write again soon. — Aqua Static" : format === "flash" ? "That's your flash. Stay sharp, Carolina." : "That's the pulse of campus for now. Post what you see, help who you can, and keep it Carolina. This has been Aqua Static Radio.", refs: [] });
   if (format === "flash") {
@@ -111,16 +111,16 @@ function localScript(format: BriefingFormat, length: "short" | "medium" | "long"
 
 export async function generateBriefing(user: User | null, input: GenerateBriefingInput, now = Date.now()): Promise<Briefing> {
   const interests = input.interests.length ? input.interests : (user?.interests ?? []);
-  const b = gatherBriefingItems(interests, now, input.topic);
+  const b = (await gatherBriefingItems(interests, now, input.topic));
   const all = [...b.alerts, ...b.news, ...b.events, ...b.community, ...b.transit];
   const uniq = Array.from(new Map(all.map((i) => [i.id, i])).values());
   const records = uniq.map(toRecord);
-  const tally = sharedBreakdown();
+  const tally = (await sharedBreakdown());
   if (tally.total > 0) records.push({ id: "tally", kind: "stat/kept-in-use", title: `${tally.total} items kept in use through Aqua Static`, detail: `Completed connections where something was shared instead of bought: ${sharedSummary(tally)}. Say it as a count, never as money or carbon saved.`, at: "so far", isDemo: false, href: "/connect" });
 
   let script = await composeBriefingScript(input.format, input.length, interests, records, now);
   let provider: "gemini" | "local" = "gemini";
-  if (!script) { script = localScript(input.format, input.length, b, now); provider = "local"; }
+  if (!script) { script = (await localScript(input.format, input.length, b, now)); provider = "local"; }
 
   // Only keep refs that point at real records we gathered.
   const known = new Map(uniq.map((i) => [i.id, i]));
@@ -136,19 +136,19 @@ export async function generateBriefing(user: User | null, input: GenerateBriefin
     includesDemo: sources.some((s) => s.isDemo), provider, audioProvider: hasElevenLabs() ? "elevenlabs" : "browser", audioRef: null,
     wordCount: text.split(/\s+/).filter(Boolean).length, createdAt: new Date(now),
   };
-  getDb().insert(schema.briefings).values(row).run();
+  (await getDb().insert(schema.briefings).values(row));
   bump("briefings");
   return row;
 }
 
-export function listBriefings(limit = 12): Briefing[] {
-  return getDb().select().from(schema.briefings).orderBy(desc(schema.briefings.createdAt)).limit(limit).all();
+export async function listBriefings(limit = 12): Promise<Briefing[]> {
+  return (await getDb().select().from(schema.briefings).orderBy(desc(schema.briefings.createdAt)).limit(limit));
 }
 
-export function getBriefing(id: string): Briefing | null {
-  return getDb().select().from(schema.briefings).where(eq(schema.briefings.id, id)).get() ?? null;
+export async function getBriefing(id: string): Promise<Briefing | null> {
+  return (await getDb().select().from(schema.briefings).where(eq(schema.briefings.id, id)).limit(1))[0] ?? null;
 }
 
-export function setBriefingAudio(id: string, audioRef: string) {
-  getDb().update(schema.briefings).set({ audioRef, audioProvider: "elevenlabs" }).where(eq(schema.briefings.id, id)).run();
+export async function setBriefingAudio(id: string, audioRef: string) {
+  (await getDb().update(schema.briefings).set({ audioRef, audioProvider: "elevenlabs" }).where(eq(schema.briefings.id, id)));
 }

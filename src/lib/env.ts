@@ -14,7 +14,8 @@ function authSecret(): string {
 
 export const env = {
   isProd,
-  databaseUrl: (process.env.DATABASE_URL || "file:./data/aqua.db").replace(/^file:/, ""),
+  databaseUrl: process.env.DATABASE_URL || "",
+  sourceAutoRefresh: process.env.SOURCE_AUTO_REFRESH !== "false",
   authSecret: authSecret(),
   // Demo mode defaults ON in development and OFF in production unless explicitly enabled.
   demoMode: isProd ? process.env.DEMO_MODE === "true" : process.env.DEMO_MODE !== "false",

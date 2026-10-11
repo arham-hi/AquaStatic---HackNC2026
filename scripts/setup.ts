@@ -24,21 +24,17 @@ function ensureEnvFile() {
     fs.writeFileSync(envPath, text);
     console.log("• Generated AUTH_SECRET");
   }
-  // Load .env into process.env for the rest of this script (no dotenv dependency needed).
-  for (const line of text.split(/\r?\n/)) {
-    const m = /^([A-Z0-9_]+)=(.*)$/.exec(line.trim());
-    if (m && !(m[1] in process.env)) process.env[m[1]] = m[2];
-  }
+  process.loadEnvFile(envPath);
 }
 
 async function main() {
   ensureEnvFile();
-  const { getDb } = await import("@/lib/db/client");
-  getDb();
-  console.log("• Database ready at", process.env.DATABASE_URL);
+  const { migratePostgres } = await import("./postgres-migrations.mjs");
+  await migratePostgres(process.env.DATABASE_URL);
+  console.log("• PostgreSQL database ready");
 
   const { seedDemoData } = await import("@/lib/services/demo");
-  const seeded = await seedDemoData({ reset: args.has("--reset") || args.has("--seed-only") });
+  const seeded = await seedDemoData({ reset: args.has("--reset") });
   console.log(`• Seeded ${seeded.length} demo posts (${seeded.reduce((n, s) => n + s.matches.length, 0)} matches suggested)`);
 
   if (!args.has("--seed-only")) {
@@ -52,4 +48,4 @@ async function main() {
   console.log("\nDone. Start the app with: npm run dev  →  http://localhost:3000");
 }
 
-main().catch((e) => { console.error(e); process.exit(1); });
+main().then(async () => { const { resetDbForTests } = await import("@/lib/db/client"); await resetDbForTests(); }).catch((e) => { console.error("Setup failed:", e.code || e.name); process.exit(1); });

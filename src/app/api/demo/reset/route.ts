@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 export const POST = route(async (req) => {
   requireDemoMode();
   const reseed = new URL(req.url).searchParams.get("reseed") !== "0";
-  resetDemoData();
+  (await resetDemoData());
   resetRateLimits();
   const seeded = reseed ? await seedDemoData() : [];
   return json({ ok: true, seeded: seeded.length });

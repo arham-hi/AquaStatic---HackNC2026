@@ -24,44 +24,44 @@ export function assertDemoMode() {
   if (!env.demoMode) throw new ApiError(403, "Demo mode is disabled");
 }
 
-export function ensureDemoUsers() {
+export async function ensureDemoUsers() {
   const db = getDb();
   for (const u of DEMO_USERS) {
-    db.insert(schema.users).values({ ...u, createdAt: new Date() }).onConflictDoUpdate({ target: schema.users.id, set: { displayName: u.displayName, avatar: u.avatar, isDemo: true } }).run();
+    (await db.insert(schema.users).values({ ...u, createdAt: new Date() }).onConflictDoUpdate({ target: schema.users.id, set: { displayName: u.displayName, avatar: u.avatar, isDemo: true } }));
   }
 }
 
-export function syncLocations() {
+export async function syncLocations() {
   const db = getDb();
   for (const l of LOCATIONS) {
-    db.insert(schema.locations).values({ id: l.id, name: l.name, aliases: l.aliases, lat: l.lat, lng: l.lng, category: l.category })
-      .onConflictDoUpdate({ target: schema.locations.id, set: { name: l.name, aliases: l.aliases, lat: l.lat, lng: l.lng, category: l.category } }).run();
+    (await db.insert(schema.locations).values({ id: l.id, name: l.name, aliases: l.aliases, lat: l.lat, lng: l.lng, category: l.category })
+      .onConflictDoUpdate({ target: schema.locations.id, set: { name: l.name, aliases: l.aliases, lat: l.lat, lng: l.lng, category: l.category } }));
   }
 }
 
 /** Remove demo posts and everything hanging off them (matches, conversations, messages, notifications of demo users). */
-export function resetDemoData() {
+export async function resetDemoData() {
   const db = getDb();
   const demoUserIds = DEMO_USERS.map((u) => u.id);
-  const demoPosts = db.select({ id: schema.posts.id }).from(schema.posts).where(or(eq(schema.posts.isDemo, true), inArray(schema.posts.authorId, demoUserIds))).all().map((p) => p.id);
-  db.transaction((tx) => {
+  const demoPosts = (await db.select({ id: schema.posts.id }).from(schema.posts).where(or(eq(schema.posts.isDemo, true), inArray(schema.posts.authorId, demoUserIds)))).map((p) => p.id);
+  await db.transaction(async (tx) => {
     if (demoPosts.length) {
-      const ms = tx.select({ id: schema.matches.id }).from(schema.matches).where(or(inArray(schema.matches.requestPostId, demoPosts), inArray(schema.matches.offerPostId, demoPosts))).all().map((m) => m.id);
+      const ms = (await tx.select({ id: schema.matches.id }).from(schema.matches).where(or(inArray(schema.matches.requestPostId, demoPosts), inArray(schema.matches.offerPostId, demoPosts)))).map((m) => m.id);
       if (ms.length) {
-        const cs = tx.select({ id: schema.conversations.id }).from(schema.conversations).where(inArray(schema.conversations.matchId, ms)).all().map((c) => c.id);
+        const cs = (await tx.select({ id: schema.conversations.id }).from(schema.conversations).where(inArray(schema.conversations.matchId, ms))).map((c) => c.id);
         if (cs.length) {
-          tx.delete(schema.messages).where(inArray(schema.messages.conversationId, cs)).run();
-          tx.delete(schema.conversationParticipants).where(inArray(schema.conversationParticipants.conversationId, cs)).run();
-          tx.delete(schema.conversations).where(inArray(schema.conversations.id, cs)).run();
+          (await tx.delete(schema.messages).where(inArray(schema.messages.conversationId, cs)));
+          (await tx.delete(schema.conversationParticipants).where(inArray(schema.conversationParticipants.conversationId, cs)));
+          (await tx.delete(schema.conversations).where(inArray(schema.conversations.id, cs)));
         }
-        tx.delete(schema.matches).where(inArray(schema.matches.id, ms)).run();
+        (await tx.delete(schema.matches).where(inArray(schema.matches.id, ms)));
       }
-      tx.delete(schema.bookmarks).where(inArray(schema.bookmarks.itemId, demoPosts)).run();
-      tx.delete(schema.reports).where(inArray(schema.reports.itemId, demoPosts)).run();
-      tx.delete(schema.posts).where(inArray(schema.posts.id, demoPosts)).run();
+      (await tx.delete(schema.bookmarks).where(inArray(schema.bookmarks.itemId, demoPosts)));
+      (await tx.delete(schema.reports).where(inArray(schema.reports.itemId, demoPosts)));
+      (await tx.delete(schema.posts).where(inArray(schema.posts.id, demoPosts)));
     }
-    tx.delete(schema.notifications).where(inArray(schema.notifications.userId, demoUserIds)).run();
-    tx.delete(schema.briefings).where(eq(schema.briefings.includesDemo, true)).run();
+    (await tx.delete(schema.notifications).where(inArray(schema.notifications.userId, demoUserIds)));
+    (await tx.delete(schema.briefings).where(eq(schema.briefings.includesDemo, true)));
   });
 
   bump("posts"); bump("matches"); bump("messages"); bump("notifications"); bump("briefings");
@@ -85,12 +85,12 @@ const SCENARIOS: Scenario[] = [
 ];
 
 export async function seedDemoData(opts: { reset?: boolean } = {}) {
-  syncLocations();
-  ensureSources();
-  ensureDemoUsers();
-  if (opts.reset) resetDemoData();
+  (await syncLocations());
+  (await ensureSources());
+  (await ensureDemoUsers());
+  if (opts.reset) (await resetDemoData());
   const db = getDb();
-  const users = new Map(db.select().from(schema.users).where(inArray(schema.users.id, DEMO_USERS.map((u) => u.id))).all().map((u) => [u.id, u]));
+  const users = new Map((await db.select().from(schema.users).where(inArray(schema.users.id, DEMO_USERS.map((u) => u.id)))).map((u) => [u.id, u]));
   const out = [];
   for (const s of SCENARIOS) {
     const parsed = await parsePost(s.text);
@@ -113,14 +113,14 @@ export const DEMO_STEPS = {
 
 export async function injectStep(step: keyof typeof DEMO_STEPS) {
   const s = DEMO_STEPS[step];
-  ensureDemoUsers();
-  const user = getDb().select().from(schema.users).where(eq(schema.users.id, s.user)).get()!;
+  (await ensureDemoUsers());
+  const user = (await getDb().select().from(schema.users).where(eq(schema.users.id, s.user)).limit(1))[0]!;
   const parsed = await parsePost(s.text);
-  return createPost(user, {
+  return (await createPost(user, {
     description: s.text, type: parsed.type, category: parsed.category, title: parsed.title, summary: parsed.summary,
     locationId: parsed.locationId ?? "davis-library", locationNote: parsed.locationNote, urgency: parsed.urgency,
     expiry: parsed.durationMinutes && parsed.durationMinutes > 90 ? "3h" : "1h", keywords: parsed.keywords,
     attributes: { item: parsed.item, subject: parsed.subject, powerClass: parsed.powerClass, durationMinutes: parsed.durationMinutes, destination: parsed.destination, lostOrFound: parsed.lostOrFound },
     isDemo: true,
-  });
+  }));
 }

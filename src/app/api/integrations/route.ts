@@ -3,4 +3,4 @@ import { integrationStatusQuick } from "@/lib/services/integrations";
 
 export const dynamic = "force-dynamic";
 
-export const GET = route(async () => json({ integrations: integrationStatusQuick() }));
+export const GET = route(async () => json({ integrations: (await integrationStatusQuick()) }));

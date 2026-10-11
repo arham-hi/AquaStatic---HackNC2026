@@ -7,8 +7,8 @@ import { loadTransit } from "./transit";
 export type IntegrationStatus = { id: string; name: string; state: "connected" | "fallback" | "not_configured" | "error"; detail: string; checkedAt: number | null };
 
 /** Status without network calls (safe for page loads). */
-export function integrationStatusQuick(): IntegrationStatus[] {
-  const sources = listSources();
+export async function integrationStatusQuick(): Promise<IntegrationStatus[]> {
+  const sources = (await listSources());
   const ok = sources.filter((s) => s.lastFetchedAt && !s.lastError).length;
   const lastChecked = Math.max(0, ...sources.map((s) => s.lastFetchedAt?.getTime() ?? 0)) || null;
   return [
@@ -21,7 +21,7 @@ export function integrationStatusQuick(): IntegrationStatus[] {
 
 /** Full status with live probes (developer page button). */
 export async function integrationStatusProbe(): Promise<IntegrationStatus[]> {
-  const quick = integrationStatusQuick();
+  const quick = (await integrationStatusQuick());
   const now = Date.now();
   const [g, e, t] = await Promise.all([probeGemini(), probeElevenLabs(), loadTransit()]);
   return quick.map((s) => {

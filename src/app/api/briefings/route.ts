@@ -5,7 +5,7 @@ import { rateLimit } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 
-export const GET = route(async () => json({ briefings: listBriefings(12) }));
+export const GET = route(async () => json({ briefings: (await listBriefings(12)) }));
 
 export const POST = route(async (req) => {
   const me = await currentUser();

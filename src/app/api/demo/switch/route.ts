@@ -13,7 +13,7 @@ export const POST = route(async (req) => {
   const { userId } = await parseBody(req, z.object({ userId: z.string().nullable() }));
   if (!userId) { await clearSessionCookie(); return json({ user: null }); }
   if (!DEMO_USERS.some((u) => u.id === userId)) throw new ApiError(400, "Not a demo profile");
-  ensureDemoUsers();
+  (await ensureDemoUsers());
   await setSessionCookie(userId);
-  return json({ user: getUser(userId) });
+  return json({ user: (await getUser(userId)) });
 });

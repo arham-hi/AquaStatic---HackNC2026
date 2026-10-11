@@ -8,11 +8,11 @@ export const dynamic = "force-dynamic";
 
 export const GET = route(async () => {
   const user = await currentUser();
-  return json({ user, unread: user ? unreadCount(user.id) : 0, demoMode: env.demoMode });
+  return json({ user, unread: user ? (await unreadCount(user.id)) : 0, demoMode: env.demoMode });
 });
 
 export const PATCH = route(async (req) => {
   const user = await requireUser();
   const patch = await parseBody(req, ProfileSchema);
-  return json({ user: updateProfile(user, patch) });
+  return json({ user: (await updateProfile(user, patch)) });
 });

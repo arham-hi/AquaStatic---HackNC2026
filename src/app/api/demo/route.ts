@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 
 export const GET = route(async () => {
   if (!env.demoMode) return json({ demoMode: false, users: [], steps: {} });
-  ensureDemoUsers();
+  (await ensureDemoUsers());
   const me = await currentUser();
   return json({ demoMode: true, users: DEMO_USERS.map(publicUser), steps: DEMO_STEPS, currentUserId: me?.id ?? null });
 });

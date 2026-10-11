@@ -7,5 +7,5 @@ export const dynamic = "force-dynamic";
 export const GET = route(async () => {
   const me = await currentUser();
   if (!me) return json({ notifications: [], unread: 0 });
-  return json({ notifications: listNotifications(me.id), unread: unreadCount(me.id) });
+  return json({ notifications: (await listNotifications(me.id)), unread: (await unreadCount(me.id)) });
 });

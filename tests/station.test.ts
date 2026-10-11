@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterEach, vi } from "vitest";
 import { freshDb } from "./setup";
 
-freshDb("station");
+await freshDb("station");
 
 const { getDb, schema } = await import("@/lib/db/client");
 const { createPost, CreatePostSchema } = await import("@/lib/services/posts");
@@ -11,28 +11,28 @@ const { voiceFor, resetBudgetCache } = await import("@/lib/voice/budget");
 import type { User } from "@/lib/db/schema";
 
 let maya: User;
-const post = (text: string, extra: Record<string, unknown> = {}, now?: number) =>
-  createPost(maya, CreatePostSchema.parse({
+const post = async (text: string, extra: Record<string, unknown> = {}, now?: number) =>
+  (await createPost(maya, CreatePostSchema.parse({
     description: text, type: "request", category: "borrowing", title: text.slice(0, 60),
     locationId: "davis-library", expiry: "3h", ...extra,
-  }), now);
+  }), now));
 
-const extItem = (over: Record<string, unknown>) => {
+const extItem = async (over: Record<string, unknown>) => {
   const db = getDb();
-  db.insert(schema.externalSources).values({ id: "test-src", name: "Test Source", url: "https://example.com", adapter: "rss", kind: "events", enabled: true })
-    .onConflictDoNothing().run();
-  db.insert(schema.externalItems).values({
+  (await db.insert(schema.externalSources).values({ id: "test-src", name: "Test Source", url: "https://example.com", adapter: "rss", kind: "events", enabled: true })
+    .onConflictDoNothing());
+  (await db.insert(schema.externalItems).values({
     id: `test-src:${Math.random().toString(36).slice(2)}`, sourceId: "test-src", providerId: "x",
     type: "event", title: "T", summary: "S", url: "https://example.com/e", publishedAt: null,
     startsAt: null, endsAt: null, locationName: "The Pit", lat: null, lng: null, locationId: null,
     category: "event", dedupeKey: `k${Math.random()}`, createdAt: new Date(), ...over,
-  }).run();
+  }));
 };
 
-beforeAll(() => {
-  syncLocations();
-  ensureDemoUsers();
-  maya = getDb().select().from(schema.users).all().find((u) => u.id === "u_demo_maya")!;
+beforeAll(async () => {
+  (await syncLocations());
+  (await ensureDemoUsers());
+  maya = (await getDb().select().from(schema.users)).find((u) => u.id === "u_demo_maya")!;
 });
 
 afterEach(() => {
@@ -62,7 +62,7 @@ describe("station planner", () => {
 
   it("prioritizes an official alert over updates", async () => {
     const now = Date.now();
-    extItem({ type: "alert", title: "Carolina Alert: shelter in place drill", summary: "Drill on campus.", publishedAt: new Date(now), category: "alert" });
+    (await extItem({ type: "alert", title: "Carolina Alert: shelter in place drill", summary: "Drill on campus.", publishedAt: new Date(now), category: "alert" }));
     const seg = await planNextSegment(now);
     expect(seg).not.toBeNull();
     expect(kindOf(seg!)).toBe("alert");
@@ -71,7 +71,7 @@ describe("station planner", () => {
 
   it("announces an ingested event starting within 45 minutes", async () => {
     const now = Date.now();
-    extItem({ type: "event", title: "Sunset yoga on the quad", startsAt: new Date(now + 20 * 60_000), endsAt: new Date(now + 80 * 60_000) });
+    (await extItem({ type: "event", title: "Sunset yoga on the quad", startsAt: new Date(now + 20 * 60_000), endsAt: new Date(now + 80 * 60_000) }));
     const seg = await planNextSegment(now);
     expect(kindOf(seg!)).toBe("event_soon");
     expect(seg!.script).toMatch(/yoga/i);

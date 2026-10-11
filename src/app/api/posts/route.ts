@@ -12,11 +12,11 @@ export const GET = route(async (req) => {
   const mine = u.searchParams.get("mine") === "1";
   const user = mine ? await currentUser() : null;
   if (mine && !user) return json({ posts: [] });
-  const posts = listPosts({
+  const posts = (await listPosts({
     type: type && (POST_TYPES as readonly string[]).includes(type) ? (type as PostType) : undefined,
     authorId: user?.id, includeExpired: mine, status: mine ? ["open", "matched", "in_progress", "fulfilled", "resolved", "expired"] : ["open", "matched", "in_progress"],
     q: u.searchParams.get("q") || undefined, limit: 200,
-  });
+  }));
   return json({ posts });
 });
 

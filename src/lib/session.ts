@@ -54,7 +54,7 @@ export async function currentUser(): Promise<User | null> {
   const p = decodeSession(jar.get(SESSION_COOKIE)?.value);
   if (!p) return null;
   const db = getDb();
-  return db.select().from(schema.users).where(eq(schema.users.id, p.uid)).get() ?? null;
+  return (await db.select().from(schema.users).where(eq(schema.users.id, p.uid)).limit(1))[0] ?? null;
 }
 
 const GUEST_NAMES = ["Tar Heel", "Ram", "Heel", "Carolina Student"];
@@ -75,7 +75,7 @@ export async function requireUser(): Promise<User> {
     isDemo: false,
     createdAt: new Date(),
   };
-  db.insert(schema.users).values(user).run();
+  (await db.insert(schema.users).values(user));
   await setSessionCookie(user.id);
   return user;
 }

@@ -13,27 +13,27 @@ import { rateLimit } from "@/lib/rate-limit";
 import type { ParseResult } from "@/lib/ai/types";
 import type { User } from "@/lib/db/schema";
 
-export function createLinkCode(userId: string) {
+export async function createLinkCode(userId: string) {
   const db = getDb();
   const code = linkCode();
   const expiresAt = new Date(Date.now() + 10 * MINUTE);
-  db.insert(schema.linkCodes).values({ code, userId, expiresAt, usedAt: null }).run();
+  (await db.insert(schema.linkCodes).values({ code, userId, expiresAt, usedAt: null }));
   return { code, expiresAt: expiresAt.getTime(), instructions: `Text "LINK ${code}" to the Aqua Static iMessage line within 10 minutes.` };
 }
 
-export function resolveHandle(handle: string): User | null {
-  const row = getDb().select().from(schema.channelLinks).where(eq(schema.channelLinks.handle, handle)).get();
-  return row ? getUser(row.userId) : null;
+export async function resolveHandle(handle: string): Promise<User | null> {
+  const row = (await getDb().select().from(schema.channelLinks).where(eq(schema.channelLinks.handle, handle)).limit(1))[0];
+  return row ? (await getUser(row.userId)) : null;
 }
 
-function consumeLinkCode(handle: string, code: string): User | null {
+async function consumeLinkCode(handle: string, code: string): Promise<User | null> {
   const db = getDb();
-  const row = db.select().from(schema.linkCodes).where(and(eq(schema.linkCodes.code, code), isNull(schema.linkCodes.usedAt), gt(schema.linkCodes.expiresAt, new Date()))).get();
+  const row = (await db.select().from(schema.linkCodes).where(and(eq(schema.linkCodes.code, code), isNull(schema.linkCodes.usedAt), gt(schema.linkCodes.expiresAt, new Date()))).limit(1))[0];
   if (!row) return null;
-  db.update(schema.linkCodes).set({ usedAt: new Date() }).where(eq(schema.linkCodes.code, code)).run();
-  db.insert(schema.channelLinks).values({ handle, userId: row.userId, createdAt: new Date() })
-    .onConflictDoUpdate({ target: schema.channelLinks.handle, set: { userId: row.userId } }).run();
-  return getUser(row.userId);
+  (await db.update(schema.linkCodes).set({ usedAt: new Date() }).where(eq(schema.linkCodes.code, code)));
+  (await db.insert(schema.channelLinks).values({ handle, userId: row.userId, createdAt: new Date() })
+    .onConflictDoUpdate({ target: schema.channelLinks.handle, set: { userId: row.userId } }));
+  return (await getUser(row.userId));
 }
 
 // Pending drafts awaiting a YES, keyed by handle. ponytail: in-memory, fine for one worker process.
@@ -53,14 +53,14 @@ export async function handleChannelMessage(handle: string, text: string): Promis
 
   const link = /^link\s+(\d{6})$/i.exec(t);
   if (link) {
-    const u = consumeLinkCode(handle, link[1]);
+    const u = (await consumeLinkCode(handle, link[1]));
     return { text: u ? `Linked! You're ${u.displayName} on Aqua Static. Ask me what's happening, or tell me what you need.` : "That code is invalid or expired. Get a fresh one from your Profile page." };
   }
   if (/^(help|\?)$/i.test(t)) {
     return { text: `Aqua Static — your campus in real time.\n• "What's happening near Davis?"\n• "Any free food?"\n• "I need a charger at the UL"\n• "LINK 123456" to connect your account\nMap: ${base}` };
   }
 
-  const user = resolveHandle(handle);
+  const user = (await resolveHandle(handle));
   const pend = pending.get(handle);
   if (pend && /^(yes|y|post it|confirm)$/i.test(t)) {
     pending.delete(handle);
