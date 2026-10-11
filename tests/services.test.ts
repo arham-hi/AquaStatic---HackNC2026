@@ -168,3 +168,20 @@ describe("missing credentials never break core flows", () => {
     expect(r2.text).toMatch(/link your account/i);
   });
 });
+
+describe("giveaway claims", () => {
+  it("claiming an offer creates a pre-accepted match that opens chat when the giver accepts", async () => {
+    const { claimOffer } = await import("@/lib/services/connections");
+    const { post: offer } = await postFromText(jordan, "Giving away a desk chair, pick up at Hinton James lobby today", "today");
+    expect(offer).toMatchObject({ type: "offer", category: "giveaway" });
+    const claim = claimOffer(priya, offer.id);
+    expect(claim.status).toBe("suggested");
+    expect(claim.requesterAccepted).toBe(true);
+    expect(claim.offererAccepted).toBe(false);
+    expect(() => claimOffer(jordan, offer.id)).toThrow(ApiError); // own post
+    const accepted = respondToMatch(jordan, claim.id, "accept");
+    expect(accepted.status).toBe("accepted");
+    expect(accepted.conversationId).toBeTruthy();
+    expect(() => claimOffer(maya, offer.id)).toThrow(ApiError); // already claimed
+  });
+});

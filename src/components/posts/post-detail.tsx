@@ -5,7 +5,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { X, MapPin, Clock, ExternalLink, Bookmark, BookmarkCheck, Share2, Flag, Pencil, Trash2, CheckCircle2, Sparkles, HeartHandshake, Hourglass, Bus } from "lucide-react";
+import { X, MapPin, Clock, ExternalLink, Bookmark, BookmarkCheck, Share2, Flag, Pencil, Trash2, CheckCircle2, Sparkles, HeartHandshake, Hourglass, Bus, HandHelping } from "lucide-react";
 import { useLive } from "@/hooks/useLive";
 import { api } from "@/lib/client";
 import { useSession, useUI } from "@/components/shell/providers";
@@ -31,6 +31,17 @@ export function PostDetail({ item, onClose, className }: { item: FeedItem; onClo
   const [saved, setSaved] = useState<boolean>((item as FeedItem & { saved?: boolean }).saved ?? false);
   const [editing, setEditing] = useState(false);
   const [reporting, setReporting] = useState(false);
+  const [claiming, setClaiming] = useState(false);
+  const { ensureUser } = useSession();
+  const claim = async () => {
+    setClaiming(true);
+    try {
+      await ensureUser();
+      const r = await api.post<{ match: { id: string } }>(`/api/posts/${item.refId}/claim`);
+      toast.success("Claimed! Waiting for them to accept.", { description: "You'll get a notification and a chat opens when they do.", action: { label: "View", onClick: () => router.push(`/connect?match=${r.match.id}`) } });
+      await refresh();
+    } catch (e) { toast.error((e as Error).message); } finally { setClaiming(false); }
+  };
   const nearest = useLive<{ stop: { name: string; code: string; meters: number; routes: string[] } | null; demo: boolean }>(item.lat != null && item.lng != null ? `/api/transit/nearest?lat=${item.lat}&lng=${item.lng}` : null, { interval: 600_000 });
 
   const live = data?.item ?? item;
@@ -88,9 +99,13 @@ export function PostDetail({ item, onClose, className }: { item: FeedItem; onClo
         <Button size="sm" variant="secondary" onClick={() => void toggleSave(live, setSaved)}>{saved ? <BookmarkCheck className="text-carolina" /> : <Bookmark />}{saved ? "Saved" : "Save"}</Button>
         <Button size="sm" variant="secondary" onClick={() => void shareItem(live)}><Share2 /> Share</Button>
         {live.url && <Button size="sm" variant="secondary" asChild><a href={live.url} target="_blank" rel="noreferrer"><ExternalLink /> Open source</a></Button>}
-        {isPost && (live.type === "request" || live.type === "offer") && !isMine && post?.status === "open" && (
+        {isPost && live.type === "offer" && (live.category === "giveaway" || live.category === "free_food") && !isMine && post?.status === "open" && (
+          <Button size="sm" variant="mint" loading={claiming} onClick={claim}><HandHelping /> {live.category === "giveaway" ? "Claim it" : "I'll take some"}</Button>
+        )}
+        {isPost && (live.type === "request" || (live.type === "offer" && live.category !== "giveaway" && live.category !== "free_food")) && !isMine && post?.status === "open" && (
           <Button size="sm" variant="mint" onClick={() => openCreate(live.type === "request" ? `I can help with: ${live.title}${live.locationName ? ` at ${live.locationName}` : ""}` : `I need: ${live.title}${live.locationName ? ` at ${live.locationName}` : ""}`)}><HeartHandshake /> {live.type === "request" ? "I can help" : "I need this"}</Button>
         )}
+        {isPost && post && post.status === "matched" && live.category === "giveaway" && <Badge tone="mint">Claimed</Badge>}
         {isPost && <Link href={`/connect?post=${live.refId}`} className="text-xs text-carolina self-center hover:underline ml-auto">Open in Connect</Link>}
       </div>
 

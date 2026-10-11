@@ -70,3 +70,18 @@ describe("query interpretation", () => {
     expect(interpretQueryLocal("I need a charger at the library").intent).toBe("create_post");
   });
 });
+
+describe("giveaways", () => {
+  it("classifies move-out giveaways as giveaway offers with the item", () => {
+    expect(parsePostLocal("Moving out, giving away a desk chair in good shape. Pick up at Hinton James lobby today.")).toMatchObject({ type: "offer", category: "giveaway", item: "desk chair", locationId: "hinton-james" });
+    expect(parsePostLocal("Free mini fridge, works fine, Granville Towers, come get it")).toMatchObject({ type: "offer", category: "giveaway", item: "mini fridge", locationId: "granville-towers" });
+    expect(parsePostLocal("anyone want a couch? free, at Craige")).toMatchObject({ type: "offer", category: "giveaway", item: "couch" });
+  });
+  it("keeps free food as food and loans as borrowing", () => {
+    expect(parsePostLocal("Free pizza in the Pit").category).toBe("free_food");
+    expect(parsePostLocal("Can I borrow a lamp for the weekend at Cobb?").category).toBe("borrowing");
+  });
+  it("recognizes someone looking for a free item", () => {
+    expect(parsePostLocal("Looking for a free desk for my dorm, anyone giving one away near Ehringhaus?")).toMatchObject({ type: "request", category: "giveaway", item: "desk" });
+  });
+});

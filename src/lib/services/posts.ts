@@ -179,7 +179,7 @@ export function sweepExpirations(now = Date.now()) {
   return res.changes;
 }
 
-export const REUSE_CATEGORIES = ["borrowing", "lost_found", "ride", "free_food"] as const;
+export const REUSE_CATEGORIES = ["borrowing", "giveaway", "lost_found", "ride", "free_food"] as const;
 
 /** Completed connections that kept an existing item in use (borrowed, returned, shared, eaten instead of binned). A count, never a savings claim. */
 export function sharedCount(): number {

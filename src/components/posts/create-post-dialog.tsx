@@ -148,7 +148,7 @@ export function CreatePostDialog() {
                 <Label htmlFor="note">Where exactly (optional)</Label>
                 <Input id="note" value={D.locationNote} onChange={(e) => set("locationNote", e.target.value)} placeholder="3rd floor, by the windows" maxLength={80} />
               </div>
-              {(D.category === "borrowing" || D.category === "lost_found" || D.category === "free_food") && (
+              {(D.category === "borrowing" || D.category === "giveaway" || D.category === "lost_found" || D.category === "free_food") && (
                 <div className="col-span-2 sm:col-span-1 space-y-1.5">
                   <Label htmlFor="item">Item</Label>
                   <Input id="item" value={D.item} onChange={(e) => set("item", e.target.value)} placeholder="USB-C laptop charger" maxLength={60} />

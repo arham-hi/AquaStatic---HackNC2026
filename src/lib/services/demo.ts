@@ -77,6 +77,8 @@ const SCENARIOS: Scenario[] = [
   { user: "u_demo_priya", text: "Lost my AirPods (white case, blue sticker) somewhere near the Carolina Union this afternoon.", expiry: "today" },
   { user: "u_demo_jordan", text: "Studying chemistry at Wilson Library 2nd floor if anybody wants to join, got snacks.", expiry: "3h" },
   { user: "u_demo_sam", text: "Looking for a ride to Harris Teeter / grocery store around 6, can chip in for gas.", expiry: "3h" },
+  { user: "u_demo_sam", text: "Moving out, giving away a desk chair in good shape. Pick up at Hinton James lobby today, first come first serve.", expiry: "today", category: "giveaway", type: "offer" },
+  { user: "u_demo_alex", text: "Free mini fridge, works fine, just don't want to haul it home. Granville Towers, come get it this weekend.", expiry: "today", category: "giveaway", type: "offer" },
   { user: "u_demo_alex", text: "DEMO EVENT: Open mic night at the Carolina Union Cabaret, 8pm, free entry.", type: "event", category: "event", title: "Open mic night (simulated)", startsInMin: 150, expiry: "today" },
   { user: "u_demo_jordan", text: "DEMO NOTICE: P2P Express running about 10 minutes behind near Morrison this evening (simulated service notice).", type: "notice", category: "transit", title: "P2P running ~10 min late (simulated)", expiry: "3h" },
 ];

@@ -1,6 +1,6 @@
 // Visual identity per category/type. Shared by map markers, feed cards, badges and legends. Client-safe.
 import {
-  Plug, GraduationCap, BookOpen, Search, Pizza, Car, CalendarDays, Newspaper, Siren, Bus, Sparkles, HandHelping, Gift, type LucideIcon,
+  Plug, GraduationCap, BookOpen, Search, Pizza, Car, CalendarDays, Newspaper, Siren, Bus, Sparkles, HandHelping, Gift, Armchair, type LucideIcon,
 } from "lucide-react";
 import type { PostCategory } from "@/lib/db/schema";
 
@@ -8,6 +8,7 @@ export type CategoryMeta = { id: PostCategory; label: string; color: string; ico
 
 export const CATEGORIES: Record<PostCategory, CategoryMeta> = {
   borrowing: { id: "borrowing", label: "Borrow & lend", color: "#4b9cd3", icon: Plug, blurb: "Chargers, calculators, umbrellas", green: "Reuse: borrowed, not bought" },
+  giveaway: { id: "giveaway", label: "Giveaway", color: "#16a34a", icon: Armchair, blurb: "Furniture, fridges, anything you'd otherwise toss", green: "Rehomed: not landfilled" },
   tutoring: { id: "tutoring", label: "Tutoring", color: "#8b5cf6", icon: GraduationCap, blurb: "Help with a class" },
   study: { id: "study", label: "Study groups", color: "#6366f1", icon: BookOpen, blurb: "Study together" },
   lost_found: { id: "lost_found", label: "Lost & found", color: "#f0a21b", icon: Search, blurb: "Lost or found items", green: "Reuse: returned, not replaced" },

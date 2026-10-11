@@ -26,7 +26,7 @@ export const locations = sqliteTable("locations", {
 
 export const POST_TYPES = ["request", "offer", "event", "news", "alert", "notice"] as const;
 export const POST_CATEGORIES = [
-  "borrowing", "tutoring", "study", "lost_found", "free_food", "ride", "event", "news", "alert", "transit", "other",
+  "borrowing", "giveaway", "tutoring", "study", "lost_found", "free_food", "ride", "event", "news", "alert", "transit", "other",
 ] as const;
 export const URGENCIES = ["low", "soon", "urgent"] as const;
 export const SOURCE_STATUSES = ["community", "user_event", "official", "demo"] as const;

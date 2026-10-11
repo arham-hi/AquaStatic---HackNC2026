@@ -131,6 +131,44 @@ export function leaveMatch(me: User, matchId: string, now = Date.now()): MatchVi
   return getMatchView(matchId, me)!;
 }
 
+
+/**
+ * Claim an open offer directly (giveaways, free food): creates a lightweight request for the claimer and a match
+ * the claimer has already accepted, so only the giver needs to say yes. Chat opens on their accept.
+ */
+export function claimOffer(me: User, offerId: string, now = Date.now()): MatchView {
+  const db = getDb();
+  const offer = db.select().from(schema.posts).where(eq(schema.posts.id, offerId)).get();
+  if (!offer || offer.status === "deleted") throw new ApiError(404, "Post not found");
+  if (offer.type !== "offer") throw new ApiError(400, "Only offers can be claimed");
+  if (offer.status !== "open") throw new ApiError(409, "This one has already been claimed");
+  if (offer.authorId === me.id) throw new ApiError(400, "That's your own post");
+  if (offer.expiresAt && offer.expiresAt.getTime() <= now) throw new ApiError(409, "This offer has expired");
+  const blocked = offer.authorId ? db.select().from(schema.blocks).where(or(
+    and(eq(schema.blocks.userId, offer.authorId), eq(schema.blocks.blockedUserId, me.id)),
+    and(eq(schema.blocks.userId, me.id), eq(schema.blocks.blockedUserId, offer.authorId)),
+  )).get() : null;
+  if (blocked) throw new ApiError(403, "You can't claim this post");
+
+  const request: Post = {
+    id: newId("p"), authorId: me.id, type: "request", category: offer.category,
+    title: `Wants: ${offer.attributes.item ?? offer.title}`, description: `Claimed "${offer.title}" in Aqua Static.`, summary: `Claimed: ${offer.title}`,
+    locationId: offer.locationId, locationNote: null, startsAt: new Date(now), expiresAt: offer.expiresAt, urgency: "soon",
+    sourceStatus: me.isDemo ? "demo" : "community", status: "open", keywords: offer.keywords, attributes: { ...offer.attributes }, isDemo: me.isDemo,
+    createdAt: new Date(now), updatedAt: new Date(now),
+  };
+  const match: Match = {
+    id: newId("m"), requestPostId: request.id, offerPostId: offer.id, score: 1,
+    explanation: { total: 1, parts: [{ label: "Direct claim", weight: 1, score: 1, detail: `${me.displayName} asked for this item directly` }], reason: `${me.displayName} claimed "${offer.title}".` },
+    status: "suggested", requesterAccepted: true, offererAccepted: false, createdAt: new Date(now), updatedAt: new Date(now),
+  };
+  db.insert(schema.posts).values(request).run();
+  db.insert(schema.matches).values(match).run();
+  if (offer.authorId) notify(offer.authorId, { type: "match_suggested", title: `${me.displayName} wants your ${offer.attributes.item ?? "item"}`, body: `Accept to open a chat and arrange pickup: ${offer.title}`, href: `/connect?match=${match.id}`, dedupeKey: `match:${match.id}`, metadata: { matchId: match.id } });
+  bump("posts"); bump("matches");
+  return getMatchView(match.id, me)!;
+}
+
 // ---------------- conversations & messages ----------------
 
 export type ConversationView = {

@@ -24,7 +24,7 @@ export async function parsePost(raw: string, now = Date.now()): Promise<ParseRes
   try {
     const ai = await generateJson(
       `Interpret this student message for the campus board. Decide if it is a request (asking for something), an offer (providing something/help, or reporting a found item), an event, news, an alert, or a notice.
-Categories: borrowing (items), tutoring (academic help), study (study partners), lost_found, free_food, ride, event, news, alert, transit, other.
+Categories: borrowing (short loans of items), giveaway (giving something away for keeps: furniture, fridges, move-out stuff; "offer" when giving, "request" when looking for one), tutoring (academic help), study (study partners), lost_found, free_food, ride, event, news, alert, transit, other.
 powerClass only for chargers/cables: laptop (can power a laptop), phone, cable (just a cable).
 durationMinutes = how long the post stays relevant if stated (e.g. "for 45 mins", "until 5pm" relative to now). startsInMinutes if the thing starts later.
 List in "missing" what a human must confirm: location (if none is clear), time, item.
@@ -37,7 +37,7 @@ Message: ${JSON.stringify(raw)}`,
     // Guard: never trust an out-of-registry location id.
     const locationId = ai.locationId && getLocation(ai.locationId) ? ai.locationId : local.locationId;
     const missing = new Set(ai.missing);
-    if (!locationId && ["borrowing", "tutoring", "study", "lost_found", "free_food"].includes(ai.category)) missing.add("location");
+    if (!locationId && ["borrowing", "giveaway", "tutoring", "study", "lost_found", "free_food"].includes(ai.category)) missing.add("location");
     if (locationId) missing.delete("location");
     return { ...ai, locationId, missing: Array.from(missing), item: ai.item ?? local.item, powerClass: ai.powerClass ?? local.powerClass, provider: "gemini" };
   } catch (e) {
