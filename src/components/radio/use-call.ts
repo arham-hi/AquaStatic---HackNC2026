@@ -6,6 +6,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "@/lib/client";
 import type { MascotState, StationLevels } from "./use-station";
+import { followVoice, speechClockTarget, voiceTarget } from "./voice-level";
 
 export type CallPhase = "off" | "ringing" | "greeting" | "listening" | "thinking" | "speaking" | "goodbye";
 export type CallLine = { role: "user" | "aqua"; text: string };
@@ -51,7 +52,7 @@ export function useCall(opts: {
   // The station's context stays suspended for the whole call, so there's never an overlap.
   const audioCtxRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
-  const freqRef = useRef<Uint8Array<ArrayBuffer> | null>(null);
+  const timeBufRef = useRef<Uint8Array<ArrayBuffer> | null>(null);
   const mp3PlayingRef = useRef(false);
   const audioElRef = useRef<HTMLAudioElement | null>(null);
 
@@ -100,7 +101,7 @@ export function useCall(opts: {
       src.connect(an); an.connect(ctx.destination);
       try { await el.play(); } catch { try { src.disconnect(); an.disconnect(); } catch { /* noop */ } URL.revokeObjectURL(url); audioElRef.current = null; return false; }
       analyserRef.current = an;
-      freqRef.current = new Uint8Array(an.frequencyBinCount);
+      timeBufRef.current = new Uint8Array(an.fftSize); // time-domain RMS needs the full frame
       mp3PlayingRef.current = true;
       await new Promise<void>((resolve) => {
         let settled = false;
@@ -159,26 +160,18 @@ export function useCall(opts: {
     await speakTts(text);                                            // browser fallback
   }, [speakMp3, speakTts]);
 
-  // mouth energy: real amplitude from the MP3 analyser, procedural rhythm for browser TTS
+  // mouth energy: real RMS from the MP3 analyser, procedural rhythm for browser TTS —
+  // same shared sampler the station uses, so the mascot behaves identically on both paths.
   useEffect(() => {
     let raf = 0;
     const tick = () => {
-      const l = levelsRef.current;
+      const an = mp3PlayingRef.current ? analyserRef.current : null;
+      const buf = timeBufRef.current;
+      const tts = speakingRef.current;
       let v = 0;
-      if (mp3PlayingRef.current && analyserRef.current && freqRef.current) {
-        analyserRef.current.getByteFrequencyData(freqRef.current);
-        let sum = 0;
-        for (let i = 2; i < 46; i++) sum += freqRef.current[i]; // voice band
-        v = Math.min(1, (sum / 44 / 255) * 2.4);
-      } else if (speakingRef.current) {
-        const t = performance.now() / 1000;
-        const kick = Math.max(0, 1 - (performance.now() - kickRef.current) / 450);
-        const syll = Math.max(0, Math.sin(t * 10.7) * 0.6 + Math.sin(t * 17.3) * 0.4);
-        const gate = 0.35 + 0.65 * Math.max(0, Math.sin(t * 2.3) * 0.7 + Math.sin(t * 5.1) * 0.3);
-        v = Math.min(1, (0.25 + 0.75 * syll) * gate + kick * 0.5);
-      }
-      l.voice += (v - l.voice) * 0.4;
-      if (l.voice < 0.01) l.voice = 0;
+      if (an && buf) v = voiceTarget(an, buf);
+      else if (tts) v = speechClockTarget(kickRef.current);
+      levelsRef.current.voice = followVoice(levelsRef.current.voice, v, !!an || tts);
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);

@@ -37,7 +37,7 @@ export const makeRig = (): Rig => ({
   },
   face: {
     eyeL: null, eyeR: null, pupilL: null, pupilR: null, happyL: null, happyR: null,
-    browL: null, browR: null, mouthSmile: null, mouthOpen: null, cheekL: null, cheekR: null,
+    browL: null, browR: null, mouthSmile: null, mouthOpen: null, tongue: null, cheekL: null, cheekR: null,
   },
 });
 
@@ -48,6 +48,7 @@ const LED_COLORS: Record<string, string> = {
 
 const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
+const smoothstep = (a: number, b: number, x: number) => { const u = clamp01((x - a) / (b - a)); return u * u * (3 - 2 * u); };
 const BASE_Y = 1.32; // body center height above the contact shadow
 
 export function useAquaAnimation(rig: Rig, anim: AquaAnim, displayTex: { on: THREE.Texture; idle: THREE.Texture }) {
@@ -72,8 +73,14 @@ export function useAquaAnimation(rig: Rig, anim: AquaAnim, displayTex: { on: THR
     const S = sm.current;
     const k = Math.min(1, dt * 12); // frame-rate independent-ish smoothing
 
+    // ---- voice → jaw: levels.voice arrives noise-floored, normalized and envelope-followed
+    // by the audio samplers; here we just ease it (snappy attack, soft release, quick rest).
+    const openTarget = s === "muted" ? 0 : talking ? clamp01(v * 1.15) : 0;
+    S.open = lerp(S.open, openTarget, openTarget > S.open ? k * 2.2 : talking ? k * 0.7 : k * 1.6);
+    const o = S.open;
+
     // ---- root: bob + dance + jump ----
-    const bobAmp = (s === "idle" ? 0.05 : s === "music" ? 0.085 : s === "alert" ? 0.012 : s === "error" ? 0.008 : talking ? 0.03 : 0.02) * damp;
+    const bobAmp = (s === "idle" ? 0.05 : s === "music" ? 0.085 : s === "alert" ? 0.012 : s === "error" ? 0.008 : talking ? 0.025 + o * 0.035 : 0.02) * damp;
     const bobSpd = s === "music" ? 2.7 : talking ? 2.1 : s === "thinking" ? 0.8 : 1.35;
     const jump = celebrating ? Math.sin((Math.PI * fp) / 1.15) * 0.42 : bouncing ? Math.sin((Math.PI * fp) / 0.7) * 0.24 : 0;
     if (rig.root) {
@@ -84,7 +91,7 @@ export function useAquaAnimation(rig: Rig, anim: AquaAnim, displayTex: { on: THR
       rig.root.rotation.y = Math.sin(t * 0.5) * 0.03 * damp;
     }
     // squash & stretch on jumps
-    S.squash = lerp(S.squash, (bouncing || celebrating) ? Math.sin(Math.PI * Math.min(1, fp)) * 0.08 : 0, k);
+    S.squash = lerp(S.squash, ((bouncing || celebrating) ? Math.sin(Math.PI * Math.min(1, fp)) * 0.08 : 0) + (talking ? o * 0.05 * damp : 0), k);
     if (rig.inner) rig.inner.scale.set(1 + S.squash * 0.7, 1 - S.squash, 1 + S.squash * 0.7);
 
     // ---- head/face tilt: hover + cursor proximity ----
@@ -94,7 +101,7 @@ export function useAquaAnimation(rig: Rig, anim: AquaAnim, displayTex: { on: THR
     S.headX = lerp(S.headX, wantX * damp + (anim.reduced ? 0 : wantX * 0), k * 0.5);
     S.headY = lerp(S.headY, wantY, k * 0.5);
     if (rig.head) {
-      rig.head.rotation.x = S.headX;
+      rig.head.rotation.x = S.headX + o * 0.05 * damp; // chin dips a little with each syllable
       rig.head.rotation.y = S.headY;
     }
 
@@ -132,21 +139,24 @@ export function useAquaAnimation(rig: Rig, anim: AquaAnim, displayTex: { on: THR
     if (rig.face.browL) { rig.face.browL.rotation.z = S.browL; rig.face.browL.position.y = 0.68 + browUp * 0.1 + browLUp * 0.08; }
     if (rig.face.browR) { rig.face.browR.rotation.z = S.browR; rig.face.browR.position.y = 0.68 + browUp * 0.1; }
 
-    // ---- mouth: real voice amplitude (MP3 RMS or boundary-kicked TTS) ----
-    const openTarget = s === "muted" ? 0 : talking ? clamp01(v * 1.35) : 0;
-    S.open = lerp(S.open, openTarget, openTarget > S.open ? k * 1.6 : k * 0.5);
+    // ---- mouth: resting smile → open oval → big rounded "O", driven by the voice level ----
     if (rig.face.mouthOpen) {
       const g = rig.face.mouthOpen;
-      g.scale.set(0.9 + S.open * 0.25, Math.max(0.001, 0.15 + S.open * 1.15), 1);
-      g.position.y = -0.14 - S.open * 0.04;
+      const wide = lerp(0.98, 0.72, o * o); // width tapers as the opening rounds
+      const tall = 0.12 + Math.pow(o, 0.85) * 1.55; // height does most of the talking
+      g.scale.set(wide, Math.max(0.001, tall), 1);
+      g.position.y = -0.14 - o * 0.12; // jaw drops while speaking
     }
     if (rig.face.mouthSmile) {
-      const smileScale = Math.max(0.001, (1 + S.happy * 0.35 + (anim.hover.current ? 0.15 : 0)) * (1 - Math.min(1, S.open * 2.2)));
+      // the smile lingers through small openings, then hands off to the open mouth
+      const handOff = 1 - smoothstep(0.06, 0.45, o);
+      const smileScale = Math.max(0.001, (1 + S.happy * 0.35 + (anim.hover.current ? 0.15 : 0)) * handOff);
       rig.face.mouthSmile.scale.setScalar(smileScale);
     }
+    if (rig.face.tongue) rig.face.tongue.position.y = -0.05 - o * 0.03 + Math.sin(t * 9.5) * 0.012 * o * damp;
 
-    // ---- cheeks ----
-    S.cheek = lerp(S.cheek, celebrating || talking ? 0.75 : 0.4, k * 0.5);
+    // ---- cheeks glow with the voice ----
+    S.cheek = lerp(S.cheek, celebrating ? 0.9 : talking ? 0.5 + o * 0.4 : 0.4, k * 0.5);
     if (rig.face.cheekL) rig.face.cheekL.opacity = S.cheek;
     if (rig.face.cheekR) rig.face.cheekR.opacity = S.cheek;
 

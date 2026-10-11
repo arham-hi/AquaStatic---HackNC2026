@@ -6,6 +6,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "@/lib/client";
 import { onChange } from "@/hooks/useLive";
+import { followVoice, rawRms, speechClockTarget, voiceTarget } from "./voice-level";
 
 export type StationKind = "alert" | "update" | "event_soon" | "roundup" | "time_check" | "welcome";
 export type StationStatus = "off_air" | "tuning" | "speaking" | "music";
@@ -304,31 +305,18 @@ export function useStation() {
   // ---------- amplitude sampler (mascot mouth / speaker energy) ----------
   useEffect(() => {
     let raf = 0;
-    const buf = new Uint8Array(512);
-    const rms = (an: AnalyserNode | null) => {
-      if (!an) return 0;
-      an.getByteTimeDomainData(buf);
-      let s = 0;
-      for (let i = 0; i < an.fftSize && i < buf.length; i++) { const d = (buf[i] - 128) / 128; s += d * d; }
-      return Math.min(1, Math.sqrt(s / an.fftSize) * 2.6);
-    };
+    const buf = new Uint8Array(1024);
     const tick = () => {
       const l = levelsRef.current;
       // Voice: real RMS for MP3; a boundary-kicked syllable pattern for browser speech.
+      const mp3 = mp3PlayingRef.current, tts = ttsSpeakingRef.current;
       let v = 0;
       if (!mutedRef.current) {
-        if (mp3PlayingRef.current) v = rms(voiceAnalyserRef.current);
-        else if (ttsSpeakingRef.current) {
-          const t = performance.now() / 1000;
-          const kick = Math.max(0, 1 - (performance.now() - kickRef.current) / 450);
-          const syll = Math.max(0, Math.sin(t * 10.7) * 0.6 + Math.sin(t * 17.3) * 0.4);
-          const gate = 0.35 + 0.65 * Math.max(0, Math.sin(t * 2.3) * 0.7 + Math.sin(t * 5.1) * 0.3);
-          v = Math.min(1, (0.25 + 0.75 * syll) * gate + kick * 0.5);
-        }
+        if (mp3) v = voiceTarget(voiceAnalyserRef.current, buf);
+        else if (tts) v = speechClockTarget(kickRef.current);
       }
-      l.voice += (v - l.voice) * 0.4;
-      if (l.voice < 0.01) l.voice = 0;
-      const m = tunedRef.current && !mutedRef.current ? rms(musicAnalyserRef.current) : 0;
+      l.voice = followVoice(l.voice, v, mp3 || tts);
+      const m = tunedRef.current && !mutedRef.current ? Math.min(1, rawRms(musicAnalyserRef.current, buf) * 2.6) : 0;
       l.music += (m - l.music) * 0.25;
       raf = requestAnimationFrame(tick);
     };

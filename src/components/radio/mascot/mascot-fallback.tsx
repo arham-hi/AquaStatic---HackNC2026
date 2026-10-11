@@ -65,7 +65,7 @@ export function MascotFallback({ state, voiceLevel = 0, className }: { state: Ma
 
           {/* mouth */}
           {talking ? (
-            <ellipse cx="130" cy="152" rx="11" ry={4 + voiceLevel * 9} fill="#5b2340" className="aqua-mouth" />
+            <ellipse cx="130" cy={152 + voiceLevel * 2.5} rx={11.5 - voiceLevel * 3} ry={3 + voiceLevel * 11} fill="#5b2340" className="aqua-mouth" />
           ) : (
             <path d="M118 148 q12 12 24 0" stroke="#0a2c42" strokeWidth="4" fill="none" strokeLinecap="round" />
           )}
@@ -92,7 +92,7 @@ export function MascotFallback({ state, voiceLevel = 0, className }: { state: Ma
         @keyframes aqua-bar { from { transform: scaleY(0.6) } to { transform: scaleY(1.15) } }
         .aqua-led-blink { animation: aqua-led 0.9s ease-in-out infinite alternate; }
         @keyframes aqua-led { from { opacity: 0.5 } to { opacity: 1 } }
-        .aqua-mouth { transition: ry 90ms linear; }
+        .aqua-mouth { transition: ry 90ms linear, rx 90ms linear, cy 90ms linear; }
         @media (prefers-reduced-motion: reduce) { .aqua-bob, .aqua-antenna, .aqua-eye, .aqua-grille-bar, .aqua-led-blink { animation: none } }
       `}</style>
     </div>

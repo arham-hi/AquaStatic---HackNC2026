@@ -15,6 +15,7 @@ export type FaceRig = {
   browR: THREE.Group | null;
   mouthSmile: THREE.Group | null;
   mouthOpen: THREE.Group | null;
+  tongue: THREE.Mesh | null;
   cheekL: THREE.MeshStandardMaterial | null;
   cheekR: THREE.MeshStandardMaterial | null;
 };
@@ -103,7 +104,7 @@ export function AquaFace({ rig }: { rig: FaceRig }) {
           <sphereGeometry args={[0.21, 20, 14]} />
           <meshStandardMaterial color="#5b2340" roughness={0.5} />
         </mesh>
-        <mesh position={[0, -0.05, 0.05]} scale={[1, 0.5, 0.6]}>
+        <mesh position={[0, -0.05, 0.05]} scale={[1, 0.5, 0.6]} ref={(o) => { rig.tongue = o; }}>
           <sphereGeometry args={[0.12, 14, 10]} />
           <meshStandardMaterial color="#ff7d9c" roughness={0.4} />
         </mesh>
