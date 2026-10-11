@@ -66,7 +66,7 @@ export function CreatePostDialog() {
     } catch (e) { toast.error((e as Error).message); } finally { setParsing(false); }
   };
 
-  const needsLocation = useMemo(() => !!draft && ["borrowing", "tutoring", "study", "lost_found", "free_food"].includes(draft.category) && !draft.locationId, [draft]);
+  const needsLocation = useMemo(() => !!draft && ["borrowing", "giveaway", "tutoring", "study", "lost_found", "free_food"].includes(draft.category) && !draft.locationId, [draft]);
   const needsDestination = !!draft && draft.category === "ride" && !draft.destination.trim();
   const canPublish = !!draft && draft.title.trim().length >= 3 && !needsLocation && !needsDestination && (draft.expiry !== "custom" || !!draft.customExpiry) && (mode === "nl" ? text.trim().length >= 3 : draft.summary.trim().length >= 3);
 
@@ -95,7 +95,7 @@ export function CreatePostDialog() {
 
   return (
     <Dialog open={createState.open} onOpenChange={setCreateOpen}>
-      <DialogContent title={D ? "Review your post" : "What's happening?"} description={D ? "We structured your message. Fix anything that's off, then publish." : "Describe it like you'd text a friend. We'll place it on the map."} className="max-w-xl">
+      <DialogContent title={D ? (parsed ? "Review your post" : "New post") : "What's happening?"} description={D ? (parsed ? "We structured your message. Fix anything that's off, then publish." : "Fill in the details and pick a campus place.") : "Describe it like you'd text a friend. We'll place it on the map."} className="max-w-xl">
         {!D ? (
           <Tabs value={mode} onValueChange={(v) => { setMode(v as "nl" | "manual"); if (v === "manual") setDraft(blankDraft()); }}>
             <TabsList className="mb-3"><TabsTrigger value="nl"><Sparkles className="size-3.5" /> Natural language</TabsTrigger><TabsTrigger value="manual">Manual form</TabsTrigger></TabsList>

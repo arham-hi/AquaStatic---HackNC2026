@@ -151,13 +151,13 @@ export async function planNextSegment(now = Date.now()): Promise<Briefing | null
   const soon = items.filter((i) => i.type === "event" && i.startsAt != null && i.startsAt > now && i.startsAt <= now + EVENT_SOON_WINDOW && fresh(i));
   if (soon.length) return (await createSegment("event_soon", [soon.sort((a, b) => a.startsAt! - b.startsAt!)[0]], items.length, now));
 
-  // 4. Roundup every 15 minutes once the station is on air and there's enough to say.
-  if (lastAt > 0 && now - lastRoundup >= ROUNDUP_EVERY && items.length >= 3) {
-    return (await createSegment("roundup", [], items.length, now));
+  // 4. Roundup: immediately on sign-on (never done one) then every 15 min, when there's enough to say.
+  if ((lastRoundup === 0 || now - lastRoundup >= ROUNDUP_EVERY) && items.length >= 3) {
+    return createSegment("roundup", [], items.length, now);
   }
 
-  // 5. Time check after 5 quiet minutes (browser voice only — never spends budget).
-  if (lastAt > 0 && now - lastAt >= TIME_CHECK_AFTER) return (await createSegment("time_check", [], items.length, now));
+  // 5. Time check after 5 quiet minutes — and the honest empty-state on a cold start with nothing to report.
+  if (lastAt === 0 || now - lastAt >= TIME_CHECK_AFTER) return createSegment("time_check", [], items.length, now);
 
   return null;
 }

@@ -6,7 +6,7 @@ import { LOCATIONS, getLocation } from "@/lib/locations";
 import { generateJson } from "./gemini";
 import { parsePostLocal, interpretQueryLocal } from "./fallback";
 import {
-  ParsedPostSchema, QueryIntentSchema, AssistantAnswerSchema, BriefingScriptSchema, ExternalClassificationSchema,
+  ParsedPostSchema, QueryIntentSchema, AssistantAnswerSchema, BriefingScriptSchema, ExternalClassificationSchema, CallReplySchema,
   type ParseResult, type QueryIntent, type BriefingScript,
 } from "./types";
 import type { BriefingFormat } from "@/lib/db/schema";
@@ -136,6 +136,49 @@ ${records.map((r) => `[${r.id}] (${r.kind}${r.isDemo ? ", DEMO" : ""}) ${r.title
     return script.segments.map((s) => s.text).join(" ").trim() || null;
   } catch (e) {
     console.warn("[ai] composeStationLine failed:", (e as Error).message);
+    return null;
+  }
+}
+
+/** Aqua's spoken reply during a live call. Persona lives here; grounding comes from the
+ *  records the server retrieved for this turn. Returns null without Gemini (caller uses local reply). */
+export async function composeCallReply(args: {
+  message: string;
+  history: { role: "user" | "aqua"; text: string }[];
+  records: GroundingRecord[];
+  callerName: string | null;
+  now?: number;
+}): Promise<import("./types").CallReply | null> {
+  if (!hasGemini()) return null;
+  const { message, history, records, callerName, now = Date.now() } = args;
+  const system = `You are Aqua, the AI radio host of Aqua Static Radio (Aqua FM) at UNC-Chapel Hill — a living radio mascot taking a private listener call.
+Personality: energetic, warm, funny but not obnoxious, curious about the caller, confident, occasionally playful. A real student-run radio host, never a corporate chatbot.
+Rules:
+- 1-3 spoken sentences MAX. Written for the ear: contractions, no markdown, no lists, no URLs.
+- Answer from the RECORDS and conversation ONLY. Never invent posts, people, events, alerts or numbers.
+- If records are empty for a campus question, say honestly that nothing on the board matches and suggest checking Connect or asking differently.
+- Say "demo" naturally for DEMO records.
+- callerName: the caller's name once they give it (null otherwise). Use it occasionally, not every line.
+- If the caller is clearly saying goodbye, set endCall=true and give a short warm sign-off.
+- cardIds: ids of up to 3 records you actually referenced (empty if none).
+- Follow-ups like "what about CS?" refer to the previous topic — answer in context.
+- This is a private call, not a broadcast. Never claim others can hear them.`;
+  try {
+    return await generateJson(
+      `Conversation so far:
+${history.slice(-10).map((h) => `${h.role === "user" ? "CALLER" : "AQUA"}: ${h.text}`).join("\n") || "(call just started)"}
+Caller name so far: ${callerName ?? "unknown"}
+Current campus time: ${new Date(now).toLocaleString("en-US", { timeZone: "America/New_York" })}
+
+CALLER: ${JSON.stringify(message)}
+
+Records retrieved for this turn (may be empty):
+${records.map((r) => `[${r.id}] (${r.kind}${r.isDemo ? ", DEMO" : ""}) ${r.title} — ${r.detail} — ${r.at}`).join("\n") || "(none)"}`,
+      CallReplySchema,
+      { system, temperature: 0.8 },
+    );
+  } catch (e) {
+    console.warn("[ai] composeCallReply failed:", (e as Error).message);
     return null;
   }
 }

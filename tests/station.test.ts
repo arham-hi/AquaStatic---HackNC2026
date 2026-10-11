@@ -43,6 +43,15 @@ afterEach(() => {
 });
 
 describe("station planner", () => {
+  it("cold start: produces an honest first segment even with nothing to report", async () => {
+    // Empty feed on a fresh station table → the empty-state time check, never silence.
+    const seg = await planNextSegment();
+    expect(seg).not.toBeNull();
+    expect(kindOf(seg!)).toBe("time_check");
+    expect(seg!.script).toMatch(/listening to Aqua Static/);
+    expect(seg!.audioProvider).toBe("browser");
+  });
+
   it("announces a brand-new post as an update segment", async () => {
     await post("Need a graphing calculator at Davis Library");
     const seg = await planNextSegment();
@@ -77,10 +86,10 @@ describe("station planner", () => {
     expect(seg!.script).toMatch(/yoga/i);
   });
 
-  it("fires a roundup only after the station has spoken and enough time passed", async () => {
-    const now = Date.now();
-    // last segment exists from earlier tests; 16 min later with live items → roundup
-    const seg = await planNextSegment(now + 16 * 60_000);
+  it("fires a roundup every 15 minutes while there's enough to say", async () => {
+    const { recent } = await nextSegments(null);
+    const lastRoundupAt = new Date(recent.find((s) => s.kind === "roundup")?.createdAt ?? recent[0].createdAt).getTime();
+    const seg = await planNextSegment(lastRoundupAt + 16 * 60_000);
     expect(seg).not.toBeNull();
     expect(kindOf(seg!)).toBe("roundup");
     expect(seg!.format).toBe("station");
