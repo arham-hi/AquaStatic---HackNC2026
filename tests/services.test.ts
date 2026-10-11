@@ -163,7 +163,7 @@ describe("digest and assistant from actual records (no Gemini key)", () => {
     expect(a.answer).toMatch(/pizza/i);
     expect(a.sources.length).toBeGreaterThan(0);
     const none = await ask(null, "Any events at Kenan Stadium tonight?");
-    expect(none.sources.length === 0 ? /couldn't find/i.test(none.answer) : true).toBe(true);
+    expect(none.sources.length === 0 ? /couldn't find|no .*events are listed/i.test(none.answer) : true).toBe(true);
     const draft = await ask(maya, "I need a phone charger at the Union for 20 minutes");
     expect(draft.draft?.type).toBe("request");
   });

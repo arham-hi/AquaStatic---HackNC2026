@@ -69,7 +69,7 @@ export async function composeAnswer(question: string, records: GroundingRecord[]
   if (!hasGemini()) return null;
   try {
     return await generateJson(
-      `Answer the student's question using ONLY the records below. If the records do not answer it, say you could not find verified information and suggest where to look (calendar.unc.edu, alertcarolina.unc.edu, mychtransit.org). Keep it under 120 words, friendly, specific, with times. Mention when something is DEMO data. Return citedIds = ids of records you used.
+      `Answer the student's question using ONLY the records below and the supplied search context. For location follow-ups, answer the resolved topic (for example events), not general facts about the building. Nearby records may have a different venue name. If the records do not answer it, explain what is missing; suggest only a relevant official source (calendar.unc.edu for events, alertcarolina.unc.edu for safety, mychtransit.org for buses). Keep it under 120 words, friendly, specific, with times. Mention when something is DEMO data. Return citedIds = only ids of records actually discussed in your answer, never unrelated records or invented ids.
 
 Question: ${JSON.stringify(question)}
 
