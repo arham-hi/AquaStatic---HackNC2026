@@ -4,14 +4,13 @@ import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Bus, Database, MapPin, MessageSquareDashed, Radio, RefreshCw, RotateCcw, Send, Wrench, Zap } from "lucide-react";
+import { Bus, Database, MapPin, Radio, RefreshCw, RotateCcw, Wrench, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Badge, Card, Chip, EmptyState, Input, Skeleton } from "@/components/ui/primitives";
+import { Badge, Card, Chip, EmptyState, Skeleton } from "@/components/ui/primitives";
 import { useSession, useUI } from "@/components/shell/providers";
 import { useLive } from "@/hooks/useLive";
 import { api } from "@/lib/client";
 import { timeAgo } from "@/lib/time";
-import { cn } from "@/lib/utils";
 import type { IntegrationStatus } from "@/lib/services/integrations";
 
 type Source = { id: string; name: string; url: string; homepage: string; adapter: string; kind: string; enabled: boolean; lastFetchedAt: string | null; lastError: string | null; lastCount: number };
@@ -30,7 +29,6 @@ export function DeveloperPanel() {
       <Integrations />
       <DemoControls />
       <Sources />
-      <Simulator />
     </div>
   );
 }
@@ -41,6 +39,7 @@ function SectionTitle({ children, right }: { children: React.ReactNode; right?: 
 
 function Integrations() {
   const live = useLive<{ integrations: IntegrationStatus[] }>("/api/integrations", { interval: 15000, scopes: ["sources"] });
+  const budget = useLive<{ remaining: number | null; limit: number | null; reserve: number; mode: string }>("/api/station/budget", { interval: 60000 });
   const [probing, setProbing] = useState(false);
   const [transitBusy, setTransitBusy] = useState(false);
   const probe = async () => {
@@ -68,6 +67,11 @@ function Integrations() {
           ))}
         </div>
       )}
+      <p className="text-xs text-fg-muted border-t border-border pt-2.5">
+        {budget.data?.remaining != null
+          ? <>Voice budget: <span className="font-semibold text-fg">{budget.data.remaining.toLocaleString()}{budget.data.limit ? ` of ${budget.data.limit.toLocaleString()}` : ""} characters left</span> · reserve {budget.data.reserve.toLocaleString()} · mode {budget.data.mode}</>
+          : "Voice budget: unavailable without an ElevenLabs key"}
+      </p>
     </Card>
   );
 }
@@ -121,7 +125,7 @@ function DemoControls() {
     setBusy(key);
     try { await fn(); } catch (e) { toast.error((e as Error).message); } finally { setBusy(null); }
   };
-  const actions: { key: string; label: string; icon: React.ElementType; variant?: "primary" | "secondary" | "danger" | "mint"; fn: () => Promise<void> }[] = [
+  const actions: { key: string; label: string; icon: React.ComponentType<{ className?: string }>; variant?: "primary" | "secondary" | "danger" | "mint"; fn: () => Promise<void> }[] = [
     { key: "reset", label: "Reset demo to start", icon: RotateCcw, variant: "danger", fn: async () => { if (!confirm("Wipe demo posts, matches and messages, then reseed?")) return; await api.post("/api/demo/reset"); await refresh(); toast.success("Demo reset"); } },
     { key: "seed", label: "Load example activity", icon: Database, variant: "secondary", fn: async () => { await api.post("/api/demo/seed"); toast.success("Example activity loaded"); } },
     { key: "maya", label: "Inject Maya's charger request", icon: Zap, fn: async () => { await api.post("/api/demo/inject", { step: "mayaRequest" }); toast.success("Posted as Maya"); } },
@@ -160,42 +164,4 @@ function DemoControls() {
   );
 }
 
-function Simulator() {
-  const integ = useLive<{ integrations: IntegrationStatus[] }>("/api/integrations", { interval: 30000 });
-  const photon = integ.data?.integrations.find((i) => i.id === "photon");
-  const [handle, setHandle] = useState("+15550000000");
-  const [text, setText] = useState("");
-  const [log, setLog] = useState<{ who: "you" | "bot"; text: string }[]>([]);
-  const [busy, setBusy] = useState(false);
-  const send = async () => {
-    const t = text.trim();
-    if (!t || busy) return;
-    setBusy(true);
-    setLog((l) => [...l, { who: "you", text: t }]);
-    setText("");
-    try { const r = await api.post<{ reply: string }>("/api/dev/simulate-message", { handle, text: t }); setLog((l) => [...l, { who: "bot", text: r.reply }]); } catch (e) { toast.error((e as Error).message); } finally { setBusy(false); }
-  };
-  return (
-    <Card className="space-y-3">
-      <SectionTitle right={<Badge tone="amber"><MessageSquareDashed className="size-3" /> Simulator · no real texts sent</Badge>}>iMessage simulator (Photon)</SectionTitle>
-      <div className="flex items-center gap-2 text-xs text-fg-muted flex-wrap">
-        <span>Photon:</span>
-        {photon ? <Badge tone={photon.state === "connected" ? "mint" : "neutral"}>{photon.state === "connected" ? "credentials present" : "not connected"}</Badge> : <Skeleton className="w-20 h-4" />}
-        <span>Real texts need the worker: <code className="rounded bg-fg/5 px-1">npm run worker:photon</code>. This box runs the same command handler locally.</span>
-      </div>
-      <div className="h-56 overflow-y-auto scrollbar-thin rounded-xl border border-border p-3 space-y-1.5 bg-bg/60" role="log" aria-live="polite">
-        {log.length === 0 && <p className="text-sm text-fg-faint text-center py-6">Try “help”, “any free food?”, or “I need a charger at the UL”.</p>}
-        {log.map((m, i) => (
-          <div key={i} className={cn("flex", m.who === "you" ? "justify-end" : "justify-start")}>
-            <div className={cn("max-w-[85%] rounded-2xl px-3 py-1.5 text-sm whitespace-pre-wrap break-words", m.who === "you" ? "bg-mint text-white" : "bg-bg-elev border border-border")}>{m.text}</div>
-          </div>
-        ))}
-      </div>
-      <form className="flex gap-2 flex-wrap" onSubmit={(e) => { e.preventDefault(); void send(); }}>
-        <Input value={handle} onChange={(e) => setHandle(e.target.value)} aria-label="Phone handle" className="w-40" maxLength={60} />
-        <Input value={text} onChange={(e) => setText(e.target.value)} aria-label="Message text" placeholder="Text as this phone…" className="flex-1 min-w-[160px]" maxLength={500} />
-        <Button type="submit" loading={busy} disabled={!text.trim()} aria-label="Send simulated text"><Send /> Send</Button>
-      </form>
-    </Card>
-  );
-}
+

@@ -1,4 +1,4 @@
-import { env, hasElevenLabs, hasGemini, hasPhoton } from "@/lib/env";
+import { env, hasElevenLabs, hasGemini } from "@/lib/env";
 import { probeGemini } from "@/lib/ai/gemini";
 import { probeElevenLabs } from "@/lib/voice/elevenlabs";
 import { listSources } from "./sources";
@@ -14,7 +14,6 @@ export function integrationStatusQuick(): IntegrationStatus[] {
   return [
     { id: "gemini", name: "Gemini", state: hasGemini() ? "connected" : "fallback", detail: hasGemini() ? `Key present (${env.gemini.model}) — run a probe to validate` : "Not configured — deterministic local parser & templates", checkedAt: null },
     { id: "elevenlabs", name: "ElevenLabs", state: hasElevenLabs() ? "connected" : "fallback", detail: hasElevenLabs() ? "Key present — run a probe to validate" : "Not configured — browser speech synthesis", checkedAt: null },
-    { id: "photon", name: "Photon (iMessage)", state: hasPhoton() ? "connected" : "not_configured", detail: hasPhoton() ? "Credentials present — start `npm run worker:photon`" : "Photon not connected — set SPECTRUM_PROJECT_ID / SPECTRUM_PROJECT_SECRET", checkedAt: null },
     { id: "sources", name: "Campus sources", state: ok === sources.length && ok > 0 ? "connected" : ok > 0 ? "error" : "not_configured", detail: `${ok}/${sources.length} feeds healthy`, checkedAt: lastChecked },
     { id: "transit", name: "Transit", state: "fallback", detail: "Not loaded yet", checkedAt: null },
   ];

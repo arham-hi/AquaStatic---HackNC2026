@@ -186,7 +186,7 @@ export const externalItems = sqliteTable(
   (t) => [uniqueIndex("external_dedupe_idx").on(t.dedupeKey), index("external_starts_idx").on(t.startsAt), index("external_published_idx").on(t.publishedAt)],
 );
 
-export const BRIEFING_FORMATS = ["flash", "radio", "podcast", "digest", "letter"] as const;
+export const BRIEFING_FORMATS = ["flash", "radio", "podcast", "digest", "letter", "station"] as const;
 export type BriefingFormat = (typeof BRIEFING_FORMATS)[number];
 export type BriefingSegment = { title: string; text: string; refs: string[] };
 export type BriefingSourceRef = { kind: "post" | "external" | "transit"; id: string; title: string; href: string; at: number | null; isDemo: boolean };

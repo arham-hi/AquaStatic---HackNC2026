@@ -83,6 +83,10 @@ Adapters in `src/lib/sources/adapters.ts`, orchestration in `src/lib/services/so
 
 Each refresh: 12s timeout, dedupe by canonical URL, timestamp normalization, location resolution (venue name → registry, or coordinates snapped within 120 m), source attribution, last-fetched/last-error bookkeeping. Items are summaries + links; full articles are never stored. Refresh happens lazily when data is older than 15 minutes, from the Discover "Refresh feeds" button, or via `POST /api/sources/refresh` with `Authorization: Bearer $CRON_SECRET` for a scheduler.
 
+## Aqua FM music bed
+
+The radio station's background music in `public/music/` is synthesized in-house by `scripts/make-music.mjs` — no third-party audio. Track credits and license notes are in [`docs/MUSIC_CREDITS.md`](docs/MUSIC_CREDITS.md).
+
 ## Transit data
 
 `src/lib/services/transit.ts` downloads the Chapel Hill Transit GTFS zip (verified at https://mychtransit.org/gtfs), parses `routes/stops/trips/shapes/stop_times` with a tiny CSV parser, builds per-route GeoJSON and stop lists, and caches the result for 24h in `data/gtfs/cht.json` and memory. The feed is schedule-only; real-time vehicle positions are **not** shown, and the UI links to the official tracker. If the download fails (offline venue), a clearly labeled DEMO overlay with approximate geometry is used instead.

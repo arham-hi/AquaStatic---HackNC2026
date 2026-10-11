@@ -88,14 +88,15 @@ export async function composeBriefingScript(
   format: BriefingFormat, length: "short" | "medium" | "long", interests: string[], records: GroundingRecord[], now = Date.now(),
 ): Promise<BriefingScript | null> {
   if (!hasGemini()) return null;
-  const words = { flash: { short: 70, medium: 110, long: 150 }, radio: { short: 220, medium: 320, long: 420 }, podcast: { short: 400, medium: 600, long: 800 }, digest: { short: 120, medium: 200, long: 300 }, letter: { short: 180, medium: 280, long: 400 } }[format][length];
+  const f = format === "station" ? "radio" : format; // station rows are written by the station service, not here
+  const words = { flash: { short: 70, medium: 110, long: 150 }, radio: { short: 220, medium: 320, long: 420 }, podcast: { short: 400, medium: 600, long: 800 }, digest: { short: 120, medium: 200, long: 300 }, letter: { short: 180, medium: 280, long: 400 } }[f][length];
   const style = {
     flash: "a 30-60 second 'Campus Flash' spoken briefing. Punchy, no filler.",
     radio: "a friendly 2-3 minute 'Aqua Static Radio' show with segments: Opening, Campus updates, Upcoming events, Community needs & opportunities, Transit, Closing.",
     podcast: "a conversational single-host podcast deep dive. Give context and texture, but only from the records.",
     digest: "a written text digest with short highlight bullets per segment. Plain text, no markdown symbols.",
     letter: "a warm written newsletter titled 'Your Carolina Letter', with short sections and a sign-off.",
-  }[format];
+  }[f];
   try {
     return await generateJson(
       `Write ${style} Target about ${words} words total. Date/time: ${new Date(now).toLocaleString("en-US", { timeZone: "America/New_York" })}.
@@ -109,6 +110,32 @@ ${records.map((r) => `[${r.id}] (${r.kind}${r.isDemo ? ", DEMO" : ""}) ${r.title
     );
   } catch (e) {
     console.warn("[ai] composeBriefingScript failed:", (e as Error).message);
+    return null;
+  }
+}
+
+/** One short spoken segment for the 24/7 station (update, event_soon, alert). Returns null without Gemini. */
+export async function composeStationLine(kind: string, records: GroundingRecord[], now = Date.now()): Promise<string | null> {
+  if (!hasGemini() || !records.length) return null;
+  const style = {
+    update: "a 30-second radio update announcing a brand-new post on the community board. Lead with the newest item, mention who posted (first name only), what and where, and end with a natural call to reply in Connect",
+    event_soon: "a 20-second heads-up that an event starts within the hour. Give the title, place and start time, and who listed it",
+    alert: "a calm, serious 20-second read of an official campus alert. No jokes, no hype. Say the source, what it says, and that details are on Alert Carolina",
+  }[kind] ?? "a short radio update";
+  try {
+    const script = await generateJson(
+      `Write ${style}. At most ${kind === "update" ? 60 : 45} words, one segment, spoken-word friendly, no markdown, no URLs.
+Rules: Use ONLY the records. Never invent details, people, or numbers. Say "demo" out loud for DEMO records.
+Current campus time: ${new Date(now).toLocaleString("en-US", { timeZone: "America/New_York" })}.
+
+Records:
+${records.map((r) => `[${r.id}] (${r.kind}${r.isDemo ? ", DEMO" : ""}) ${r.title} — ${r.detail} — ${r.at}`).join("\n")}`,
+      BriefingScriptSchema,
+      { system: SYSTEM, temperature: 0.5 },
+    );
+    return script.segments.map((s) => s.text).join(" ").trim() || null;
+  } catch (e) {
+    console.warn("[ai] composeStationLine failed:", (e as Error).message);
     return null;
   }
 }

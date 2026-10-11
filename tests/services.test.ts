@@ -158,7 +158,7 @@ describe("missing credentials never break core flows", () => {
     const s = integrationStatusQuick();
     expect(s.find((x) => x.id === "gemini")?.state).toBe("fallback");
     expect(s.find((x) => x.id === "elevenlabs")?.state).toBe("fallback");
-    expect(s.find((x) => x.id === "photon")?.state).toBe("not_configured");
+    expect(s.find((x) => x.id === "photon")).toBeUndefined(); // Photon row removed (not this demo track)
   });
   it("channel handler drafts and refuses to publish without confirmation/link", async () => {
     const { handleChannelMessage } = await import("@/lib/services/channels");

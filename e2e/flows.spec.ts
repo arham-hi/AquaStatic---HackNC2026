@@ -94,7 +94,7 @@ test("two users: request → offer → match → accept both → chat → comple
   await expect(pm.getByText(/USB-C laptop charger/).first()).toBeVisible({ timeout: 20000 });
 
   // Radio briefing mentions the new activity and labels demo data.
-  await pm.goto("/radio");
+  await pm.goto("/radio/studio");
   await pm.getByRole("button", { name: /^Generate Campus Radio$/ }).click();
   await expect(pm.getByText(/Includes demo data/).first()).toBeVisible({ timeout: 30000 });
   await expect(pm.getByRole("tab", { name: /Transcript/ })).toBeVisible();
@@ -103,6 +103,33 @@ test("two users: request → offer → match → accept both → chat → comple
 
   await maya.close();
   await jordan.close();
+});
+
+test("radio station: Aqua greets, then announces a real new post", async ({ page, request }) => {
+  await reset(request);
+  await switchDemo(page, "u_demo_maya");
+  const errors: string[] = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+
+  await page.goto("/radio");
+  await expect(page.getByRole("heading", { level: 1, name: "Aqua Static Radio" })).toBeVisible();
+  const mascot = page.locator("[data-mascot-state]");
+  await expect(mascot).toBeVisible();
+  await expect(page.getByText("Chapel Hill's campus, live. Tap to tune in.")).toBeVisible();
+
+  await page.getByRole("button", { name: /^Tune in$/ }).click();
+  // A real segment plays (TTS or the text fallback in headless CI) → talking state + quoted transcript.
+  await expect(page.getByText("Aqua is speaking").first()).toBeVisible({ timeout: 20000 });
+  await expect(page.locator('section[aria-label="Now on air"]')).toContainText(/“/);
+
+  // A new campus post lands mid-broadcast and the station picks it up.
+  const pr = await page.request.post("/api/posts", {
+    data: { title: "Lost keys near the Bell Tower", description: "Lost keys near the Bell Tower — reward if found", type: "request", category: "lost_found", locationId: "bell-tower", expiry: "3h" },
+  });
+  expect(pr.status()).toBe(201);
+  await expect(page.locator('section[aria-label="Recent segments"]')).toContainText(/keys|Bell Tower/i, { timeout: 30000 });
+  await expect(page.locator('section[aria-label="Recent segments"]').getByText(/demo/i).first()).toBeVisible();
+  expect(errors).toEqual([]);
 });
 
 test("transit page shows schedule data or a labeled demo overlay with the official tracker link", async ({ page }) => {
