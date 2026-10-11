@@ -185,3 +185,14 @@ describe("giveaway claims", () => {
     expect(() => claimOffer(maya, offer.id)).toThrow(ApiError); // already claimed
   });
 });
+
+describe("kept-in-use tally", () => {
+  it("counts only completed reuse connections, by kind", async () => {
+    const { sharedBreakdown, sharedSummary } = await import("@/lib/services/posts");
+    const before = sharedBreakdown();
+    // The charger exchange earlier in this file was completed (borrowing) and the chair claim was accepted but not completed.
+    expect(before.borrowed).toBeGreaterThanOrEqual(1);
+    expect(before.total).toBe(before.borrowed + before.rehomed + before.returned + before.rides + before.food);
+    expect(sharedSummary(before)).toMatch(/borrowed/);
+  });
+});

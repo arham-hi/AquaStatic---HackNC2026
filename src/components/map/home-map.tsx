@@ -10,6 +10,7 @@ import { useLive } from "@/hooks/useLive";
 import { useSession, useUI } from "@/components/shell/providers";
 import { TopBar } from "@/components/shell/topbar";
 import { Bubbles } from "@/components/shell/bubbles";
+import { sharedTitle } from "@/components/feed/shared-tally";
 import { PostDetail } from "@/components/posts/post-detail";
 import { greeting } from "@/lib/time";
 import { getLocation } from "@/lib/locations";
@@ -19,7 +20,7 @@ import type { MapHandle, ConnectionLine } from "./campus-map";
 
 const CampusMap = dynamic(() => import("./campus-map").then((m) => m.CampusMap), { ssr: false, loading: () => <div className="absolute inset-0 grid place-items-center bg-bg"><div className="text-sm text-fg-muted animate-pulse">Loading Chapel Hill…</div></div> });
 
-type MarkersResponse = { markers: FeedItem[]; counts: { live: number; requests: number; offers: number; alerts: number; last24h: number } };
+type MarkersResponse = { markers: FeedItem[]; counts: { live: number; requests: number; offers: number; alerts: number; last24h: number; shared: number; sharedBreakdown: { borrowed: number; rehomed: number; returned: number; rides: number; food: number } } };
 type RecentMatch = { id: string; status: string; createdAt: string; request: { id: string; locationId: string | null; title: string }; offer: { id: string; locationId: string | null; title: string } };
 
 export function HomeMap() {
@@ -36,6 +37,7 @@ export function HomeMap() {
 
   const markers = data.data?.markers ?? [];
   const live = data.data?.counts.live ?? null;
+  const shared = data.data?.counts.shared ?? 0;
 
   // Focus requests from the assistant, cards elsewhere, or ?item= deep links.
   useEffect(() => {
@@ -94,6 +96,7 @@ export function HomeMap() {
         <h1 className="text-lg font-semibold tracking-tight leading-tight">{greeting()}, {firstName}.</h1>
         <p className="text-xs text-fg-muted mt-0.5">
           {live == null ? "Loading campus…" : live === 0 ? "Quiet right now. Be the first to post." : `${plural(live, "thing")} happening on campus right now.`}
+          {shared > 0 && data.data && <span className="text-mint" title={sharedTitle(data.data.counts.sharedBreakdown)}> · {shared} kept in use</span>}
         </p>
       </div>
 

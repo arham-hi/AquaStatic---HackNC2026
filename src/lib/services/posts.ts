@@ -183,12 +183,28 @@ export function sweepExpirations(now = Date.now()) {
 export const REUSE_CATEGORIES = ["borrowing", "giveaway", "lost_found", "ride", "free_food"] as const;
 
 /** Completed connections that kept an existing item in use (borrowed, returned, shared, eaten instead of binned). A count, never a savings claim. */
-export function sharedCount(): number {
+export type SharedBreakdown = { total: number; borrowed: number; rehomed: number; returned: number; rides: number; food: number };
+
+export function sharedBreakdown(): SharedBreakdown {
   const db = getDb();
-  const rows = db.select({ c: sql<number>`count(*)` }).from(schema.matches)
+  const rows = db.select({ category: schema.posts.category, c: sql<number>`count(*)` }).from(schema.matches)
     .innerJoin(schema.posts, eq(schema.posts.id, schema.matches.requestPostId))
-    .where(and(eq(schema.matches.status, "completed"), inArray(schema.posts.category, [...REUSE_CATEGORIES]))).get();
-  return rows?.c ?? 0;
+    .where(and(eq(schema.matches.status, "completed"), inArray(schema.posts.category, [...REUSE_CATEGORIES])))
+    .groupBy(schema.posts.category).all();
+  const by = Object.fromEntries(rows.map((r) => [r.category, r.c])) as Partial<Record<string, number>>;
+  const b = { borrowed: by.borrowing ?? 0, rehomed: by.giveaway ?? 0, returned: by.lost_found ?? 0, rides: by.ride ?? 0, food: by.free_food ?? 0 };
+  return { total: b.borrowed + b.rehomed + b.returned + b.rides + b.food, ...b };
+}
+
+export const sharedCount = () => sharedBreakdown().total;
+
+/** Human sentence for the tally, e.g. "4 borrowed · 2 rehomed · 1 ride shared". Empty when nothing yet. */
+export function sharedSummary(b: SharedBreakdown): string {
+  const parts = [
+    b.borrowed && `${b.borrowed} borrowed`, b.rehomed && `${b.rehomed} rehomed`, b.returned && `${b.returned} returned to owners`,
+    b.rides && `${b.rides} ride${b.rides === 1 ? "" : "s"} shared`, b.food && `${b.food} food pickup${b.food === 1 ? "" : "s"}`,
+  ].filter(Boolean) as string[];
+  return parts.join(" · ");
 }
 
 export function activityCounts(now = Date.now()) {
@@ -196,6 +212,7 @@ export function activityCounts(now = Date.now()) {
   const since = now - 24 * HOUR;
   return {
     shared: sharedCount(),
+    sharedBreakdown: sharedBreakdown(),
     live: live.length,
     requests: live.filter((p) => p.type === "request").length,
     offers: live.filter((p) => p.type === "offer").length,
