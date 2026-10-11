@@ -13,7 +13,7 @@ function getClient() {
   return (client ??= new GoogleGenAI({ apiKey: env.gemini.apiKey, httpOptions: { timeout: CALL_TIMEOUT_MS } }));
 }
 
-const CALL_TIMEOUT_MS = 8_000;
+const CALL_TIMEOUT_MS = 12_000;
 const g = globalThis as unknown as { __geminiPausedUntil?: number; __geminiPauseReason?: string };
 
 export class GeminiUnavailable extends Error {}
