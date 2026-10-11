@@ -6,6 +6,12 @@ import { env, hasElevenLabs } from "@/lib/env";
 
 const audioDir = () => path.resolve(process.cwd(), "data", "audio");
 
+export class ElevenLabsError extends Error {
+  constructor(public status: number, body: string) {
+    super(`ElevenLabs ${status}: ${body.slice(0, 200)}`);
+  }
+}
+
 export async function synthesize(text: string, voiceId = env.elevenlabs.voiceId, model = "eleven_turbo_v2_5"): Promise<Buffer> {
   if (!hasElevenLabs()) throw new Error("ELEVENLABS_API_KEY not configured");
   const res = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}?output_format=mp3_44100_128`, {
@@ -13,7 +19,7 @@ export async function synthesize(text: string, voiceId = env.elevenlabs.voiceId,
     headers: { "xi-api-key": env.elevenlabs.apiKey, "content-type": "application/json", accept: "audio/mpeg" },
     body: JSON.stringify({ text: text.slice(0, 4800), model_id: model, voice_settings: { stability: 0.45, similarity_boost: 0.75, style: 0.35, use_speaker_boost: true } }),
   });
-  if (!res.ok) throw new Error(`ElevenLabs ${res.status}: ${(await res.text()).slice(0, 200)}`);
+  if (!res.ok) throw new ElevenLabsError(res.status, await res.text());
   return Buffer.from(await res.arrayBuffer());
 }
 

@@ -96,6 +96,7 @@ export function useStation() {
   const mutedRef = useRef(false);
   const ttsSpeakingRef = useRef(false);
   const mp3PlayingRef = useRef(false);
+  const mp3BrokenUntilRef = useRef(0); // circuit breaker: after an audio-route failure, don't hammer it
   const kickRef = useRef(0);
   const utterRef = useRef<SpeechSynthesisUtterance[]>([]);
 
@@ -144,7 +145,7 @@ export function useStation() {
   /** ElevenLabs MP3 through the voice analyser. Resolves true when it played (or was skipped); false → caller falls back to TTS. */
   const playMp3 = useCallback((seg: StationSegment) => new Promise<boolean>((resolve) => {
     const ctx = ctxRef.current, vGain = voiceGainRef.current, vAn = voiceAnalyserRef.current;
-    if (!ctx || !vGain || !vAn) return resolve(false);
+    if (!ctx || !vGain || !vAn || Date.now() < mp3BrokenUntilRef.current) return resolve(false);
     const gen = genRef.current;
     let settled = false;
     const done = (ok: boolean) => {
@@ -156,7 +157,11 @@ export function useStation() {
     cancelPlaybackRef.current = () => done(true);
     fetch(`/api/station/${seg.id}/audio`)
       .then(async (res) => {
-        if (!res.ok) return done(false);
+        if (!res.ok) {
+          // 5xx/4xx here means the configured studio voice can't render — stop retrying for 2 min.
+          mp3BrokenUntilRef.current = Date.now() + 120_000;
+          return done(false);
+        }
         const url = URL.createObjectURL(await res.blob());
         if (gen !== genRef.current) { URL.revokeObjectURL(url); return done(true); }
         const a = new Audio(url);
