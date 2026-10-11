@@ -117,7 +117,13 @@ export async function completeMatch(me: User, matchId: string, now = Date.now())
   const view = (await getMatchView(matchId, me));
   if (!view) throw new ApiError(404, "Match not found");
   if (!view.myRole) throw new ApiError(403, "You are not part of this match");
+  if (view.status === "completed") return view; // repeated completions are idempotent
   if (view.status !== "accepted") throw new ApiError(409, "Only accepted matches can be completed");
+  // Completion only counts while both posts are still live — an expired or deleted post ends the exchange.
+  for (const p of [view.request, view.offer]) {
+    if (!["matched", "in_progress"].includes(p.status)) throw new ApiError(409, "A post is no longer active");
+    if (p.expiresAt && p.expiresAt.getTime() <= now) throw new ApiError(409, "A post has expired");
+  }
   (await db.update(schema.matches).set({ status: "completed", updatedAt: new Date(now) }).where(eq(schema.matches.id, matchId)));
   (await db.update(schema.posts).set({ status: "fulfilled", updatedAt: new Date(now) }).where(eq(schema.posts.id, view.requestPostId)));
   (await db.update(schema.posts).set({ status: "resolved", updatedAt: new Date(now) }).where(eq(schema.posts.id, view.offerPostId)));
