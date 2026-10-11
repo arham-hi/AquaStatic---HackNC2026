@@ -10,6 +10,8 @@ import { cn } from "@/lib/utils";
 import { categoryMeta } from "@/lib/categories";
 import type { FeedItem } from "@/lib/services/feed";
 import type { TransitRoute, TransitStop } from "@/lib/services/transit";
+import { addWalkersWhenReady } from "./walkers-layer";
+import { addAeroBuildings, removeAeroBuildings } from "./aero-buildings";
 
 export const STYLE_URLS = { light: "https://tiles.openfreemap.org/styles/liberty", dark: "https://tiles.openfreemap.org/styles/dark" } as const;
 export const HOME_CAMERA = { center: CAMPUS_CENTER as [number, number], zoom: 15.6, pitch: 55, bearing: -17 };
@@ -49,6 +51,7 @@ function jitter(id: string, index: number): [number, number] {
 }
 
 function add3d(map: maplibregl.Map, dark: boolean) {
+    addAeroBuildings(map, dark);
   if (!map.getSource("openmaptiles") || map.getLayer("aqua-3d")) return;
   const labelLayer = map.getStyle().layers.find((l: maplibregl.LayerSpecification) => l.type === "symbol" && (l.layout as Record<string, unknown> | undefined)?.["text-field"])?.id;
   // Hide the style's own extrusion layer if present so we control the look.
@@ -127,6 +130,7 @@ export function CampusMap({ theme, markers, selectedId, onSelect, show3d, transi
     map.on("style.load", () => {
       ensureOverlaySources(map);
       if (show3dRef.current) add3d(map, themeRef.current === "dark");
+      addWalkersWhenReady(map);
       setStyleReady((n) => n + 1);
     });
     map.on("click", (e: maplibregl.MapMouseEvent) => {
