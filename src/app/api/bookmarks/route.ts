@@ -7,11 +7,11 @@ export const dynamic = "force-dynamic";
 
 export const GET = route(async () => {
   const me = await currentUser();
-  return json({ bookmarks: me ? listBookmarks(me) : [] });
+  return json({ bookmarks: me ? (await listBookmarks(me)) : [] });
 });
 
 export const POST = route(async (req) => {
   const me = await requireUser();
   const { itemType, itemId } = await parseBody(req, z.object({ itemType: z.enum(["post", "external"]), itemId: z.string().min(1).max(220) }));
-  return json({ saved: toggleBookmark(me, itemType, itemId) });
+  return json({ saved: (await toggleBookmark(me, itemType, itemId)) });
 });

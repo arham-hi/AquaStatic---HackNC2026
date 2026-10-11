@@ -8,7 +8,7 @@ vi.mock("@/lib/ai/gemini", async (importOriginal) => {
   return { ...orig, generateJson: vi.fn(orig.generateJson) };
 });
 
-freshDb("call"); 
+await freshDb("call");
 
 const { getDb, schema } = await import("@/lib/db/client");
 const { createPost, CreatePostSchema } = await import("@/lib/services/posts");
@@ -25,10 +25,10 @@ const post = (text: string, extra: Record<string, unknown> = {}) =>
     locationId: "davis-library", expiry: "3h", ...extra,
   }));
 
-beforeAll(() => {
-  syncLocations();
-  ensureDemoUsers();
-  maya = getDb().select().from(schema.users).all().find((u) => u.id === "u_demo_maya")!;
+beforeAll(async () => {
+  await syncLocations();
+  await ensureDemoUsers();
+  maya = (await getDb().select().from(schema.users)).find((u) => u.id === "u_demo_maya")!;
 });
 
 afterEach(() => {

@@ -7,5 +7,5 @@ export const dynamic = "force-dynamic";
 /** One-time code the user texts to the Aqua Static iMessage line to link their phone to this account. */
 export const POST = route(async () => {
   const me = await requireUser();
-  return json(createLinkCode(me.id), { status: 201 });
+  return json((await createLinkCode(me.id)), { status: 201 });
 });

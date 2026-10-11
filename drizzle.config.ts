@@ -1,8 +1,8 @@
 import { defineConfig } from "drizzle-kit";
 
 export default defineConfig({
-  dialect: "sqlite",
+  dialect: "postgresql",
   schema: "./src/lib/db/schema.ts",
-  out: "./drizzle",
-  dbCredentials: { url: (process.env.DATABASE_URL || "file:./data/aqua.db").replace(/^file:/, "") },
+  out: "./drizzle-pg",
+  dbCredentials: { url: process.env.DATABASE_URL || process.env.TIGER_DATABASE_URL || "" },
 });

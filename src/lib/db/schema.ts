@@ -1,9 +1,9 @@
-import { sqliteTable, text, integer, real, primaryKey, index, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { pgTable, text, integer, doublePrecision, boolean, timestamp, jsonb, primaryKey, index, uniqueIndex } from "drizzle-orm/pg-core";
 
-const ts = (name: string) => integer(name, { mode: "timestamp_ms" });
-const json = <T>(name: string) => text(name, { mode: "json" }).$type<T>();
+const ts = (name: string) => timestamp(name, { mode: "date", withTimezone: true, precision: 3 });
+const json = <T>(name: string) => jsonb(name).$type<T>();
 
-export const users = sqliteTable("users", {
+export const users = pgTable("users", {
   id: text("id").primaryKey(),
   displayName: text("display_name").notNull(),
   avatar: text("avatar").notNull().default("🐏"), // emoji avatar; no uploads needed for the hackathon
@@ -11,16 +11,16 @@ export const users = sqliteTable("users", {
   helpSubjects: json<string[]>("help_subjects").notNull().default([]),
   preferredArea: text("preferred_area"), // location id
   notificationPrefs: json<Record<string, boolean>>("notification_prefs").notNull().default({}),
-  isDemo: integer("is_demo", { mode: "boolean" }).notNull().default(false),
+  isDemo: boolean("is_demo").notNull().default(false),
   createdAt: ts("created_at").notNull(),
 });
 
-export const locations = sqliteTable("locations", {
+export const locations = pgTable("locations", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),
   aliases: json<string[]>("aliases").notNull().default([]),
-  lat: real("lat").notNull(),
-  lng: real("lng").notNull(),
+  lat: doublePrecision("lat").notNull(),
+  lng: doublePrecision("lng").notNull(),
   category: text("category").notNull(), // library, dining, landmark, academic, athletics, residence, street, transit
 });
 
@@ -47,7 +47,7 @@ export type PostAttributes = {
   lostOrFound?: "lost" | "found" | null;
 };
 
-export const posts = sqliteTable(
+export const posts = pgTable(
   "posts",
   {
     id: text("id").primaryKey(),
@@ -66,7 +66,7 @@ export const posts = sqliteTable(
     status: text("status").$type<PostStatus>().notNull().default("open"),
     keywords: json<string[]>("keywords").notNull().default([]),
     attributes: json<PostAttributes>("attributes").notNull().default({}),
-    isDemo: integer("is_demo", { mode: "boolean" }).notNull().default(false),
+    isDemo: boolean("is_demo").notNull().default(false),
     createdAt: ts("created_at").notNull(),
     updatedAt: ts("updated_at").notNull(),
   },
@@ -81,31 +81,31 @@ export type MatchExplanation = {
   reason: string;
 };
 
-export const matches = sqliteTable(
+export const matches = pgTable(
   "matches",
   {
     id: text("id").primaryKey(),
     requestPostId: text("request_post_id").notNull().references(() => posts.id),
     offerPostId: text("offer_post_id").notNull().references(() => posts.id),
-    score: real("score").notNull(),
+    score: doublePrecision("score").notNull(),
     explanation: json<MatchExplanation>("explanation").notNull(),
     status: text("status").$type<MatchStatus>().notNull().default("suggested"),
-    requesterAccepted: integer("requester_accepted", { mode: "boolean" }).notNull().default(false),
-    offererAccepted: integer("offerer_accepted", { mode: "boolean" }).notNull().default(false),
+    requesterAccepted: boolean("requester_accepted").notNull().default(false),
+    offererAccepted: boolean("offerer_accepted").notNull().default(false),
     createdAt: ts("created_at").notNull(),
     updatedAt: ts("updated_at").notNull(),
   },
   (t) => [uniqueIndex("matches_pair_idx").on(t.requestPostId, t.offerPostId)],
 );
 
-export const conversations = sqliteTable("conversations", {
+export const conversations = pgTable("conversations", {
   id: text("id").primaryKey(),
   matchId: text("match_id").references(() => matches.id),
   createdAt: ts("created_at").notNull(),
   updatedAt: ts("updated_at").notNull(),
 });
 
-export const conversationParticipants = sqliteTable(
+export const conversationParticipants = pgTable(
   "conversation_participants",
   {
     conversationId: text("conversation_id").notNull().references(() => conversations.id),
@@ -115,7 +115,7 @@ export const conversationParticipants = sqliteTable(
   (t) => [primaryKey({ columns: [t.conversationId, t.userId] })],
 );
 
-export const messages = sqliteTable(
+export const messages = pgTable(
   "messages",
   {
     id: text("id").primaryKey(),
@@ -132,7 +132,7 @@ export const NOTIFICATION_TYPES = [
 ] as const;
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
 
-export const notifications = sqliteTable(
+export const notifications = pgTable(
   "notifications",
   {
     id: text("id").primaryKey(),
@@ -149,19 +149,19 @@ export const notifications = sqliteTable(
   (t) => [uniqueIndex("notifications_dedupe_idx").on(t.userId, t.dedupeKey), index("notifications_user_idx").on(t.userId, t.createdAt)],
 );
 
-export const externalSources = sqliteTable("external_sources", {
+export const externalSources = pgTable("external_sources", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),
   url: text("url").notNull(),
   adapter: text("adapter").notNull(), // localist | engage | rss
   kind: text("kind").notNull(), // events | news | alerts
-  enabled: integer("enabled", { mode: "boolean" }).notNull().default(true),
+  enabled: boolean("enabled").notNull().default(true),
   lastFetchedAt: ts("last_fetched_at"),
   lastError: text("last_error"),
   lastCount: integer("last_count").notNull().default(0),
 });
 
-export const externalItems = sqliteTable(
+export const externalItems = pgTable(
   "external_items",
   {
     id: text("id").primaryKey(), // `${sourceId}:${providerId}`
@@ -176,8 +176,8 @@ export const externalItems = sqliteTable(
     startsAt: ts("starts_at"),
     endsAt: ts("ends_at"),
     locationName: text("location_name"),
-    lat: real("lat"),
-    lng: real("lng"),
+    lat: doublePrecision("lat"),
+    lng: doublePrecision("lng"),
     locationId: text("location_id").references(() => locations.id),
     category: text("category").$type<PostCategory>().notNull().default("other"),
     dedupeKey: text("dedupe_key").notNull(),
@@ -191,7 +191,7 @@ export type BriefingFormat = (typeof BRIEFING_FORMATS)[number];
 export type BriefingSegment = { title: string; text: string; refs: string[] };
 export type BriefingSourceRef = { kind: "post" | "external" | "transit"; id: string; title: string; href: string; at: number | null; isDemo: boolean };
 
-export const briefings = sqliteTable("briefings", {
+export const briefings = pgTable("briefings", {
   id: text("id").primaryKey(),
   userId: text("user_id").references(() => users.id),
   format: text("format").$type<BriefingFormat>().notNull(),
@@ -201,7 +201,7 @@ export const briefings = sqliteTable("briefings", {
   sources: json<BriefingSourceRef[]>("sources").notNull().default([]),
   interests: json<string[]>("interests").notNull().default([]),
   length: text("length").notNull().default("medium"),
-  includesDemo: integer("includes_demo", { mode: "boolean" }).notNull().default(false),
+  includesDemo: boolean("includes_demo").notNull().default(false),
   provider: text("provider").notNull(), // gemini | local
   audioProvider: text("audio_provider").notNull().default("browser"), // browser | elevenlabs
   audioRef: text("audio_ref"), // file path under data/audio when cached
@@ -209,7 +209,7 @@ export const briefings = sqliteTable("briefings", {
   createdAt: ts("created_at").notNull(),
 });
 
-export const bookmarks = sqliteTable(
+export const bookmarks = pgTable(
   "bookmarks",
   {
     userId: text("user_id").notNull().references(() => users.id),
@@ -220,7 +220,7 @@ export const bookmarks = sqliteTable(
   (t) => [primaryKey({ columns: [t.userId, t.itemType, t.itemId] })],
 );
 
-export const reports = sqliteTable("reports", {
+export const reports = pgTable("reports", {
   id: text("id").primaryKey(),
   reporterId: text("reporter_id").notNull().references(() => users.id),
   itemType: text("item_type").notNull(), // post | user | message
@@ -230,30 +230,30 @@ export const reports = sqliteTable("reports", {
   createdAt: ts("created_at").notNull(),
 });
 
-export const blocks = sqliteTable(
+export const blocks = pgTable(
   "blocks",
   { userId: text("user_id").notNull(), blockedUserId: text("blocked_user_id").notNull(), createdAt: ts("created_at").notNull() },
   (t) => [primaryKey({ columns: [t.userId, t.blockedUserId] })],
 );
 
-export const integrationState = sqliteTable("integration_state", {
+export const integrationState = pgTable("integration_state", {
   provider: text("provider").primaryKey(), // gemini | elevenlabs | photon | sources | transit
-  enabled: integer("enabled", { mode: "boolean" }).notNull().default(false),
-  healthy: integer("healthy", { mode: "boolean" }).notNull().default(false),
+  enabled: boolean("enabled").notNull().default(false),
+  healthy: boolean("healthy").notNull().default(false),
   detail: text("detail").notNull().default(""),
   lastSuccessAt: ts("last_success_at"),
   lastCheckedAt: ts("last_checked_at"),
 });
 
 // Photon account linking: one-time expiring code typed into iMessage.
-export const linkCodes = sqliteTable("link_codes", {
+export const linkCodes = pgTable("link_codes", {
   code: text("code").primaryKey(),
   userId: text("user_id").notNull().references(() => users.id),
   expiresAt: ts("expires_at").notNull(),
   usedAt: ts("used_at"),
 });
 
-export const channelLinks = sqliteTable("channel_links", {
+export const channelLinks = pgTable("channel_links", {
   handle: text("handle").primaryKey(), // "imessage:+1555..." (never exposed publicly)
   userId: text("user_id").notNull().references(() => users.id),
   createdAt: ts("created_at").notNull(),

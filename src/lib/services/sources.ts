@@ -4,24 +4,24 @@ import { bump } from "@/lib/realtime";
 import { findLocationInText, nearestLocation } from "@/lib/locations";
 import { SOURCE_DEFS, fetchSource, type RawItem, type SourceDef } from "@/lib/sources/adapters";
 import { classifyExternal } from "@/lib/ai";
-import { hasGemini } from "@/lib/env";
+import { env, hasGemini } from "@/lib/env";
 import { HOUR, MINUTE } from "@/lib/time";
 import type { ExternalItem, PostCategory } from "@/lib/db/schema";
 
 const REFRESH_TTL = 15 * MINUTE;
 const CAMPUS_BOUNDS = { minLat: 35.88, maxLat: 35.94, minLng: -79.09, maxLng: -79.0 };
 
-export function ensureSources() {
+export async function ensureSources() {
   const db = getDb();
   for (const d of SOURCE_DEFS) {
-    db.insert(schema.externalSources).values({ id: d.id, name: d.name, url: d.url, adapter: d.adapter, kind: d.kind, enabled: true, lastFetchedAt: null, lastError: null, lastCount: 0 })
-      .onConflictDoUpdate({ target: schema.externalSources.id, set: { name: d.name, url: d.url, adapter: d.adapter, kind: d.kind } }).run();
+    (await db.insert(schema.externalSources).values({ id: d.id, name: d.name, url: d.url, adapter: d.adapter, kind: d.kind, enabled: true, lastFetchedAt: null, lastError: null, lastCount: 0 })
+      .onConflictDoUpdate({ target: schema.externalSources.id, set: { name: d.name, url: d.url, adapter: d.adapter, kind: d.kind } }));
   }
 }
 
-export function listSources() {
-  ensureSources();
-  const rows = getDb().select().from(schema.externalSources).all();
+export async function listSources() {
+  (await ensureSources());
+  const rows = (await getDb().select().from(schema.externalSources));
   return rows.map((r) => ({ ...r, homepage: SOURCE_DEFS.find((d) => d.id === r.id)?.homepage ?? r.url }));
 }
 
@@ -46,7 +46,7 @@ export async function refreshSource(id: string, now = Date.now()): Promise<{ id:
   const def = SOURCE_DEFS.find((d) => d.id === id);
   if (!def) return { id, ok: false, count: 0, error: "Unknown source (not allowlisted)" };
   const db = getDb();
-  ensureSources();
+  (await ensureSources());
   try {
     const items = await fetchSource(def, now);
     let inserted = 0;
@@ -55,7 +55,7 @@ export async function refreshSource(id: string, now = Date.now()): Promise<{ id:
     let aiBudget = hasGemini() && process.env.SOURCES_USE_GEMINI === "true" ? 6 : 0;
     for (const it of items) {
       const dedupeKey = `${def.id}:${(it.url || it.providerId).toLowerCase().replace(/[#?].*$/, "")}`;
-      const exists = db.select({ id: schema.externalItems.id }).from(schema.externalItems).where(eq(schema.externalItems.dedupeKey, dedupeKey)).get();
+      const exists = (await db.select({ id: schema.externalItems.id }).from(schema.externalItems).where(eq(schema.externalItems.dedupeKey, dedupeKey)).limit(1))[0];
       if (exists) continue;
       const place = placeFor(it);
       let category = localCategory(def, it);
@@ -71,46 +71,47 @@ export async function refreshSource(id: string, now = Date.now()): Promise<{ id:
           if (!locationId && ai.locationId) locationId = ai.locationId;
         }
       }
-      db.insert(schema.externalItems).values({
+      (await db.insert(schema.externalItems).values({
         id: `${def.id}:${it.providerId}`.slice(0, 200), sourceId: def.id, providerId: it.providerId.slice(0, 180),
         type: def.kind === "events" ? "event" : def.kind === "alerts" ? "alert" : "news",
         title: it.title.slice(0, 200), summary, url: it.url, imageUrl: it.imageUrl, publishedAt: it.publishedAt ? new Date(it.publishedAt) : null,
         startsAt: it.startsAt ? new Date(it.startsAt) : null, endsAt: it.endsAt ? new Date(it.endsAt) : null,
         locationName: it.locationName, lat: place.lat, lng: place.lng, locationId, category, dedupeKey, createdAt: new Date(now),
-      }).onConflictDoNothing().run();
+      }).onConflictDoNothing());
       inserted++;
     }
-    db.update(schema.externalSources).set({ lastFetchedAt: new Date(now), lastError: null, lastCount: items.length }).where(eq(schema.externalSources.id, id)).run();
+    (await db.update(schema.externalSources).set({ lastFetchedAt: new Date(now), lastError: null, lastCount: items.length }).where(eq(schema.externalSources.id, id)));
     if (inserted) bump("sources");
     return { id, ok: true, count: items.length };
   } catch (e) {
     const msg = (e as Error).name === "AbortError" ? "Timed out" : (e as Error).message;
-    db.update(schema.externalSources).set({ lastFetchedAt: new Date(now), lastError: msg }).where(eq(schema.externalSources.id, id)).run();
+    (await db.update(schema.externalSources).set({ lastFetchedAt: new Date(now), lastError: msg }).where(eq(schema.externalSources.id, id)));
     console.warn(`[sources] ${id} failed: ${msg}`);
     return { id, ok: false, count: 0, error: msg };
   }
 }
 
 export async function refreshAllSources(opts: { force?: boolean } = {}, now = Date.now()) {
-  ensureSources();
-  const rows = getDb().select().from(schema.externalSources).where(eq(schema.externalSources.enabled, true)).all();
+  (await ensureSources());
+  const rows = (await getDb().select().from(schema.externalSources).where(eq(schema.externalSources.enabled, true)));
   const due = rows.filter((r) => opts.force || !r.lastFetchedAt || now - r.lastFetchedAt.getTime() > REFRESH_TTL);
-  return Promise.all(due.map((r) => refreshSource(r.id, now)));
+  return Promise.all(due.map(async (r) => (await refreshSource(r.id, now))));
 }
 
 let refreshing: Promise<unknown> | null = null;
 /** Fire-and-forget refresh when data is stale. Readers never wait on the network. */
-export function refreshIfStale(now = Date.now()) {
+export async function refreshIfStale(now = Date.now()) {
+  if (!env.sourceAutoRefresh) return;
   if (refreshing) return;
-  const rows = getDb().select().from(schema.externalSources).all();
+  const rows = (await getDb().select().from(schema.externalSources));
   const stale = !rows.length || rows.some((r) => r.enabled && (!r.lastFetchedAt || now - r.lastFetchedAt.getTime() > REFRESH_TTL));
   if (!stale) return;
-  refreshing = refreshAllSources({}, now).finally(() => { refreshing = null; });
+  refreshing = refreshAllSources({}, now).catch((error) => { console.warn("[sources] Background refresh failed:", error instanceof Error ? error.name : "unknown"); }).finally(() => { refreshing = null; });
 }
 
 export type ExternalFilters = { type?: "event" | "news" | "alert"; upcomingOnly?: boolean; sinceMs?: number; q?: string; locationId?: string; limit?: number };
 
-export function listExternalItems(f: ExternalFilters = {}, now = Date.now()): ExternalItem[] {
+export async function listExternalItems(f: ExternalFilters = {}, now = Date.now()): Promise<ExternalItem[]> {
   const db = getDb();
   const conds = [];
   if (f.type) conds.push(eq(schema.externalItems.type, f.type));
@@ -124,23 +125,23 @@ export function listExternalItems(f: ExternalFilters = {}, now = Date.now()): Ex
   // Events sort by start time ascending (what's next); news/alerts by publish time descending.
   const q = db.select().from(schema.externalItems).where(conds.length ? and(...conds) : undefined);
   const rows = f.type === "event"
-    ? q.orderBy(schema.externalItems.startsAt).limit(f.limit ?? 200).all()
-    : q.orderBy(desc(sql`coalesce(${schema.externalItems.publishedAt}, ${schema.externalItems.startsAt}, ${schema.externalItems.createdAt})`)).limit(f.limit ?? 200).all();
+    ? (await q.orderBy(schema.externalItems.startsAt).limit(f.limit ?? 200))
+    : (await q.orderBy(desc(sql`coalesce(${schema.externalItems.publishedAt}, ${schema.externalItems.startsAt}, ${schema.externalItems.createdAt})`)).limit(f.limit ?? 200));
   return rows;
 }
 
-export function getExternalItem(id: string): ExternalItem | null {
-  return getDb().select().from(schema.externalItems).where(eq(schema.externalItems.id, id)).get() ?? null;
+export async function getExternalItem(id: string): Promise<ExternalItem | null> {
+  return (await getDb().select().from(schema.externalItems).where(eq(schema.externalItems.id, id)).limit(1))[0] ?? null;
 }
 
-export function getExternalItems(ids: string[]): ExternalItem[] {
+export async function getExternalItems(ids: string[]): Promise<ExternalItem[]> {
   if (!ids.length) return [];
-  return getDb().select().from(schema.externalItems).where(inArray(schema.externalItems.id, ids)).all();
+  return (await getDb().select().from(schema.externalItems).where(inArray(schema.externalItems.id, ids)));
 }
 
 /** Drop stale items so the table does not grow forever (events long past, news older than 30 days). */
-export function pruneExternal(now = Date.now()) {
+export async function pruneExternal(now = Date.now()) {
   const db = getDb();
-  db.delete(schema.externalItems).where(and(eq(schema.externalItems.type, "event"), lt(schema.externalItems.endsAt, new Date(now - 2 * 24 * HOUR)))).run();
-  db.delete(schema.externalItems).where(and(sql`${schema.externalItems.type} != 'event'`, lt(schema.externalItems.publishedAt, new Date(now - 30 * 24 * HOUR)))).run();
+  (await db.delete(schema.externalItems).where(and(eq(schema.externalItems.type, "event"), lt(schema.externalItems.endsAt, new Date(now - 2 * 24 * HOUR)))));
+  (await db.delete(schema.externalItems).where(and(sql`${schema.externalItems.type} != 'event'`, lt(schema.externalItems.publishedAt, new Date(now - 30 * 24 * HOUR)))));
 }

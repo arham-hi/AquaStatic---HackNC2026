@@ -8,9 +8,9 @@ type Ctx = { params: Promise<{ id: string }> };
 export const GET = route<Ctx>(async (_req, ctx) => {
   const { id } = await params(ctx);
   const me = await requireUser();
-  const conversation = getConversation(me, id);
+  const conversation = (await getConversation(me, id));
   if (!conversation) throw new ApiError(404, "Conversation not found");
-  const messages = listMessages(me, id);
-  const match = conversation.matchId ? getMatchView(conversation.matchId, me) : null;
+  const messages = (await listMessages(me, id));
+  const match = conversation.matchId ? (await getMatchView(conversation.matchId, me)) : null;
   return json({ conversation, messages, match, me: me.id });
 });

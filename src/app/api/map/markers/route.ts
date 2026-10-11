@@ -4,4 +4,4 @@ import { activityCounts } from "@/lib/services/posts";
 
 export const dynamic = "force-dynamic";
 
-export const GET = route(async () => json({ markers: mapMarkers(), counts: activityCounts() }));
+export const GET = route(async () => json({ markers: (await mapMarkers()), counts: (await activityCounts()) }));

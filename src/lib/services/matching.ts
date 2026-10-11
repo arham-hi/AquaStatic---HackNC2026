@@ -102,22 +102,22 @@ export function scoreMatch(request: Post, offer: Post, now = Date.now()): ScoreR
 /** Find and persist matches for a freshly created/updated post. Returns created match rows. */
 export async function runMatching(postId: string, now = Date.now()): Promise<Match[]> {
   const db = getDb();
-  const post = db.select().from(schema.posts).where(eq(schema.posts.id, postId)).get();
+  const post = (await db.select().from(schema.posts).where(eq(schema.posts.id, postId)).limit(1))[0];
   if (!post || (post.type !== "request" && post.type !== "offer") || post.status !== "open") return [];
   const wantType = post.type === "request" ? "offer" : "request";
-  const candidates = db.select().from(schema.posts)
-    .where(and(eq(schema.posts.type, wantType), eq(schema.posts.status, "open"), eq(schema.posts.category, post.category))).all();
+  const candidates = (await db.select().from(schema.posts)
+    .where(and(eq(schema.posts.type, wantType), eq(schema.posts.status, "open"), eq(schema.posts.category, post.category))));
   if (!candidates.length) return [];
 
   // Blocks in either direction remove the candidate.
   const blockRows = post.authorId
-    ? db.select().from(schema.blocks).where(or(eq(schema.blocks.userId, post.authorId), eq(schema.blocks.blockedUserId, post.authorId))).all()
+    ? (await db.select().from(schema.blocks).where(or(eq(schema.blocks.userId, post.authorId), eq(schema.blocks.blockedUserId, post.authorId))))
     : [];
   const blocked = new Set(blockRows.flatMap((b) => [b.userId, b.blockedUserId]));
 
   // Existing match rows (declined pairs are never re-suggested).
-  const existing = db.select().from(schema.matches)
-    .where(post.type === "request" ? eq(schema.matches.requestPostId, post.id) : eq(schema.matches.offerPostId, post.id)).all();
+  const existing = (await db.select().from(schema.matches)
+    .where(post.type === "request" ? eq(schema.matches.requestPostId, post.id) : eq(schema.matches.offerPostId, post.id)));
   const existingByOther = new Map(existing.map((m) => [post.type === "request" ? m.offerPostId : m.requestPostId, m]));
 
   const created: Match[] = [];
@@ -132,23 +132,23 @@ export async function runMatching(postId: string, now = Date.now()): Promise<Mat
       id: newId("m"), requestPostId: request.id, offerPostId: offer.id, score: r.score, explanation: r.explanation,
       status: "suggested", requesterAccepted: false, offererAccepted: false, createdAt: new Date(now), updatedAt: new Date(now),
     };
-    db.insert(schema.matches).values(row).run();
+    (await db.insert(schema.matches).values(row));
     created.push(row);
-    const authors = db.select().from(schema.users).where(inArray(schema.users.id, [request.authorId, offer.authorId].filter(Boolean) as string[])).all();
+    const authors = (await db.select().from(schema.users).where(inArray(schema.users.id, [request.authorId, offer.authorId].filter(Boolean) as string[])));
     const nameOf = (id: string | null) => authors.find((a) => a.id === id)?.displayName ?? "A student";
     if (request.authorId) {
-      notify(request.authorId, {
+      (await notify(request.authorId, {
         type: "match_suggested", title: "Potential match found",
         body: `${nameOf(offer.authorId)} may have what you're looking for: ${offer.title}`,
         href: `/connect?match=${row.id}`, dedupeKey: `match:${row.id}`, metadata: { matchId: row.id, postId: request.id },
-      });
+      }));
     }
     if (offer.authorId) {
-      notify(offer.authorId, {
+      (await notify(offer.authorId, {
         type: "match_suggested", title: "Someone needs what you offered",
         body: `${nameOf(request.authorId)} posted: ${request.title}`,
         href: `/connect?match=${row.id}`, dedupeKey: `match:${row.id}`, metadata: { matchId: row.id, postId: offer.id },
-      });
+      }));
     }
   }
   if (created.length) bump("matches");

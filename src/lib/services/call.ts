@@ -79,13 +79,13 @@ function callerNameFrom(message: string, hasName: boolean): string | null {
 
 const src = (it: FeedItem): CallCard => ({ id: it.id, title: it.title, href: it.href, kind: `${it.type}`, at: it.startsAt ?? it.at, isDemo: it.isDemo, external: it.kind === "external" });
 
-function pickItems(message: string, s: Session, now: number): { intent: QueryIntent["intent"]; picked: FeedItem[] } {
+async function pickItems(message: string, s: Session, now: number): Promise<{ intent: QueryIntent["intent"]; picked: FeedItem[] }> {
   const intent = interpretQueryLocal(message);
   const followUp = intent.intent === "unknown" || (intent.intent === "whats_happening" && /about|what about|how about|and |also|too\b/i.test(message));
   const effIntent = followUp && s.lastIntent ? s.lastIntent : intent.intent;
   const loc = getLocation(intent.locationId) ?? findLocationInText(message);
 
-  const base = listFeed({ filter: "all", window: "all", limit: 400 }, now).items;
+  const base = (await listFeed({ filter: "all", window: "all", limit: 400 }, now)).items;
   const t = (it: FeedItem) => it.startsAt ?? it.at;
   const inWindow = (it: FeedItem) => {
     const tf = intent.timeframe === "any" && followUp ? "any" : intent.timeframe;
@@ -172,7 +172,7 @@ export async function callTurn(sessionId: string, message: string, now = Date.no
   const nameGuess = callerNameFrom(message, !!s.callerName);
   if (nameGuess) s.callerName = nameGuess;
 
-  const { intent, picked } = pickItems(message, s, now);
+  const { intent, picked } = await pickItems(message, s, now);
   const records: GroundingRecord[] = picked.map(toRecord);
 
   const ai = await composeCallReply({ message, history: s.history, records, callerName: s.callerName, now });

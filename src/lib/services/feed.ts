@@ -78,27 +78,27 @@ export type FeedQuery = {
   near?: { lat: number; lng: number; meters: number }; limit?: number; offset?: number; includeExternal?: boolean;
 };
 
-function authorsFor(posts: Post[]) {
+async function authorsFor(posts: Post[]) {
   const ids = Array.from(new Set(posts.map((p) => p.authorId).filter(Boolean) as string[]));
   if (!ids.length) return new Map<string, { displayName: string; avatar: string; isDemo: boolean }>();
-  const rows = getDb().select({ id: schema.users.id, displayName: schema.users.displayName, avatar: schema.users.avatar, isDemo: schema.users.isDemo }).from(schema.users).where(inArray(schema.users.id, ids)).all();
+  const rows = (await getDb().select({ id: schema.users.id, displayName: schema.users.displayName, avatar: schema.users.avatar, isDemo: schema.users.isDemo }).from(schema.users).where(inArray(schema.users.id, ids)));
   return new Map(rows.map((r) => [r.id, r]));
 }
 
-export function listFeed(qy: FeedQuery = {}, now = Date.now()): { items: FeedItem[]; total: number } {
-  sweepExpirations(now);
-  if (qy.includeExternal !== false) refreshIfStale(now);
+export async function listFeed(qy: FeedQuery = {}, now = Date.now()): Promise<{ items: FeedItem[]; total: number }> {
+  (await sweepExpirations(now));
+  if (qy.includeExternal !== false) (await refreshIfStale(now));
   const filter = qy.filter ?? "all";
   const win = qy.window ?? "recent";
 
-  const posts = listPosts({ status: ["open", "matched", "in_progress"], q: qy.q, locationId: qy.locationId, limit: 400 }, now);
-  const authors = authorsFor(posts);
+  const posts = (await listPosts({ status: ["open", "matched", "in_progress"], q: qy.q, locationId: qy.locationId, limit: 400 }, now));
+  const authors = (await authorsFor(posts));
   let items: FeedItem[] = posts.map((p) => postToFeed(p, authors.get(p.authorId ?? "")));
   if (qy.includeExternal !== false) {
     const ext = [
-      ...listExternalItems({ type: "event", upcomingOnly: true, q: qy.q, locationId: qy.locationId, limit: 150 }, now),
-      ...listExternalItems({ type: "news", sinceMs: now - 7 * 24 * HOUR, q: qy.q, limit: 60 }, now),
-      ...listExternalItems({ type: "alert", sinceMs: now - 14 * 24 * HOUR, q: qy.q, limit: 20 }, now),
+      ...(await listExternalItems({ type: "event", upcomingOnly: true, q: qy.q, locationId: qy.locationId, limit: 150 }, now)),
+      ...(await listExternalItems({ type: "news", sinceMs: now - 7 * 24 * HOUR, q: qy.q, limit: 60 }, now)),
+      ...(await listExternalItems({ type: "alert", sinceMs: now - 14 * 24 * HOUR, q: qy.q, limit: 20 }, now)),
     ];
     items.push(...ext.map(externalToFeed));
   }
@@ -144,6 +144,6 @@ export function listFeed(qy: FeedQuery = {}, now = Date.now()): { items: FeedIte
 }
 
 /** Everything with coordinates, for the map. */
-export function mapMarkers(now = Date.now()): FeedItem[] {
-  return listFeed({ filter: "all", window: "recent", limit: 500 }, now).items.filter((i) => i.lat != null && i.lng != null);
+export async function mapMarkers(now = Date.now()): Promise<FeedItem[]> {
+  return (await listFeed({ filter: "all", window: "recent", limit: 500 }, now)).items.filter((i) => i.lat != null && i.lng != null);
 }

@@ -1,39 +1,34 @@
-import Database from "better-sqlite3";
-import { drizzle } from "drizzle-orm/better-sqlite3";
-import { migrate } from "drizzle-orm/better-sqlite3/migrator";
-import fs from "node:fs";
-import path from "node:path";
+import postgres from "postgres";
+import { drizzle } from "drizzle-orm/postgres-js";
 import * as schema from "./schema";
 
 export type DB = ReturnType<typeof drizzle<typeof schema>>;
 
 // One connection per process. Stored on globalThis so Next dev hot-reloads reuse it.
-const g = globalThis as unknown as { __aquaDb?: DB; __aquaSqlite?: Database.Database };
+const g = globalThis as unknown as { __aquaPgDb?: DB; __aquaPgSql?: ReturnType<typeof postgres> };
 
-export function dbFilePath(): string {
-  const url = (process.env.DATABASE_URL || "file:./data/aqua.db").replace(/^file:/, "");
-  return path.resolve(process.cwd(), url);
+export function databaseSchema(): string {
+  const name = process.env.DATABASE_SCHEMA || "public";
+  if (name !== "public" && !/^aqua_test_[a-z0-9_]+$/.test(name)) throw new Error("Invalid DATABASE_SCHEMA");
+  return name;
 }
 
 export function getDb(): DB {
-  if (g.__aquaDb) return g.__aquaDb;
-  const file = dbFilePath();
-  fs.mkdirSync(path.dirname(file), { recursive: true });
-  const sqlite = new Database(file);
-  sqlite.pragma("journal_mode = WAL");
-  sqlite.pragma("foreign_keys = ON");
-  const db = drizzle(sqlite, { schema });
-  migrate(db, { migrationsFolder: path.resolve(process.cwd(), "drizzle") });
-  g.__aquaDb = db;
-  g.__aquaSqlite = sqlite;
-  return db;
+  if (g.__aquaPgDb) return g.__aquaPgDb;
+  const url = process.env.DATABASE_URL;
+  if (!url || !/^postgres(ql)?:\/\//.test(url)) throw new Error("DATABASE_URL must be a PostgreSQL URL. See docs/tiger-data-migration.md.");
+  try { new URL(url); } catch { throw new Error("Invalid DATABASE_URL. Check its format in .env."); }
+  const client = postgres(url, { max: 5, connect_timeout: 15, idle_timeout: 20, connection: { search_path: databaseSchema() } });
+  g.__aquaPgSql = client;
+  g.__aquaPgDb = drizzle(client, { schema });
+  return g.__aquaPgDb;
 }
 
 /** Test helper: close and forget the cached connection. */
-export function resetDbForTests() {
-  g.__aquaSqlite?.close();
-  g.__aquaDb = undefined;
-  g.__aquaSqlite = undefined;
+export async function resetDbForTests() {
+  await g.__aquaPgSql?.end({ timeout: 5 });
+  g.__aquaPgDb = undefined;
+  g.__aquaPgSql = undefined;
 }
 
 export { schema };

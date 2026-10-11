@@ -44,7 +44,7 @@ export async function ask(user: User | null, question: string, now = Date.now())
   }
 
   // ---- retrieval tools ----
-  const base = listFeed({ filter: "all", window: "all", limit: 400 }, now).items;
+  const base = (await listFeed({ filter: "all", window: "all", limit: 400 }, now)).items;
   const inWindow = (it: FeedItem) => {
     const t = it.startsAt ?? it.at;
     if (intent.timeframe === "now") return it.kind === "post" || it.type === "alert" || (it.startsAt != null && it.startsAt < now + 3 * HOUR && (it.endsAt ?? it.startsAt) > now - HOUR);

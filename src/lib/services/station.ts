@@ -29,8 +29,8 @@ const TIME_CHECK_AFTER = 5 * MINUTE;
 const FIRST_SEGMENT_POST_WINDOW = 10 * MINUTE; // on a cold start, only announce genuinely fresh posts
 const FIRST_SEGMENT_ALERT_WINDOW = 2 * HOUR;
 
-function stationRows(limit = 60): Briefing[] {
-  return getDb().select().from(schema.briefings).where(eq(schema.briefings.format, "station")).orderBy(desc(schema.briefings.createdAt)).limit(limit).all();
+async function stationRows(limit = 60): Promise<Briefing[]> {
+  return (await getDb().select().from(schema.briefings).where(eq(schema.briefings.format, "station")).orderBy(desc(schema.briefings.createdAt)).limit(limit));
 }
 
 /** The segment kind is stored in `length` for station rows (the column is unused there). */
@@ -105,14 +105,14 @@ async function createSegment(kind: StationKind, items: FeedItem[], liveCount: nu
     // Reuse the existing Campus Flash writer (Gemini when configured, local template otherwise).
     const b = await generateBriefing(null, { format: "flash", length: "short", interests: [] }, now);
     const audioProvider = await voiceFor(b.script);
-    db.update(schema.briefings).set({ format: "station", length: "roundup", title: KIND_TITLE.roundup, audioProvider }).where(eq(schema.briefings.id, b.id)).run();
+    (await db.update(schema.briefings).set({ format: "station", length: "roundup", title: KIND_TITLE.roundup, audioProvider }).where(eq(schema.briefings.id, b.id)));
     return { ...b, format: "station", length: "roundup", title: KIND_TITLE.roundup, audioProvider };
   }
 
   const records = items.map((it) => toRecord(it));
   let text = (kind === "update" || kind === "event_soon" || kind === "alert") ? await composeStationLine(kind, records, now) : null;
   let provider: "gemini" | "local" = "gemini";
-  if (!text) { text = localScript(kind, items, liveCount, now); provider = "local"; }
+  if (!text) { text = (await localScript(kind, items, liveCount, now)); provider = "local"; }
 
   const audioProvider = kind === "time_check" ? "browser" : await voiceFor(text);
   const row: Briefing = {
@@ -122,34 +122,34 @@ async function createSegment(kind: StationKind, items: FeedItem[], liveCount: nu
     includesDemo: items.some((i) => i.isDemo), provider, audioProvider, audioRef: null,
     wordCount: words(text), createdAt: new Date(now),
   };
-  db.insert(schema.briefings).values(row).run();
+  (await db.insert(schema.briefings).values(row));
   bump("briefings");
   return row;
 }
 
 /** Decide which single segment to create, if any. Priority: alert → update → event_soon → roundup → time_check. */
 export async function planNextSegment(now = Date.now()): Promise<Briefing | null> {
-  const recent = stationRows(30);
+  const recent = (await stationRows(30));
   const announced = new Set(recent.flatMap((b) => b.sources.map(announcedKey)));
   const fresh = (it: FeedItem) => !announced.has(itemKey(it));
   const lastAt = recent[0]?.createdAt.getTime() ?? 0;
   const lastRoundup = recent.find((b) => kindOf(b) === "roundup")?.createdAt.getTime() ?? 0;
 
-  const { items } = listFeed({ filter: "all", window: "recent", limit: 300 }, now);
+  const { items } = (await listFeed({ filter: "all", window: "recent", limit: 300 }, now));
 
   // 1. Official alerts first — new ones since the last segment (or last 2h on a cold start).
   const alertSince = lastAt || now - FIRST_SEGMENT_ALERT_WINDOW;
   const alerts = items.filter((i) => i.type === "alert" && i.at > alertSince && fresh(i));
-  if (alerts.length) return createSegment("alert", [alerts[0]], items.length, now);
+  if (alerts.length) return (await createSegment("alert", [alerts[0]], items.length, now));
 
   // 2. New community posts since the last segment (or last 10min on a cold start).
   const postSince = lastAt || now - FIRST_SEGMENT_POST_WINDOW;
   const updates = items.filter((i) => i.kind === "post" && i.createdAt > postSince && fresh(i));
-  if (updates.length) return createSegment("update", updates.slice(0, 3), items.length, now);
+  if (updates.length) return (await createSegment("update", updates.slice(0, 3), items.length, now));
 
   // 3. An ingested event starting within 45 minutes that hasn't been announced.
   const soon = items.filter((i) => i.type === "event" && i.startsAt != null && i.startsAt > now && i.startsAt <= now + EVENT_SOON_WINDOW && fresh(i));
-  if (soon.length) return createSegment("event_soon", [soon.sort((a, b) => a.startsAt! - b.startsAt!)[0]], items.length, now);
+  if (soon.length) return (await createSegment("event_soon", [soon.sort((a, b) => a.startsAt! - b.startsAt!)[0]], items.length, now));
 
   // 4. Roundup: immediately on sign-on (never done one) then every 15 min, when there's enough to say.
   if ((lastRoundup === 0 || now - lastRoundup >= ROUNDUP_EVERY) && items.length >= 3) {
@@ -171,7 +171,7 @@ export async function nextSegments(after: string | null, now = Date.now()): Prom
   } catch (e) {
     console.warn("[station] planner failed:", (e as Error).message);
   }
-  const rows = stationRows(60);
+  const rows = (await stationRows(60));
   const recent = rows.slice(0, 15).map(toClient);
   const latest = rows[0]?.id ?? null;
 

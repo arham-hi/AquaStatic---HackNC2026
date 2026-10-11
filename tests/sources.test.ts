@@ -3,7 +3,7 @@ import { parseRss, parseLocalist, parseEngage, stripHtml } from "@/lib/sources/a
 import { parseCsv, parseGtfs } from "@/lib/services/transit";
 import { freshDb } from "./setup";
 
-freshDb("sources");
+await freshDb("sources");
 const { postToFeed, externalToFeed } = await import("@/lib/services/feed");
 const { getDb, schema } = await import("@/lib/db/client");
 const { ensureSources, listExternalItems } = await import("@/lib/services/sources");
@@ -32,13 +32,13 @@ describe("source adapters", () => {
 });
 
 describe("ingestion deduplication", () => {
-  it("does not insert the same dedupe key twice", () => {
-    ensureSources();
+  it("does not insert the same dedupe key twice", async () => {
+    (await ensureSources());
     const db = getDb();
     const row = { id: "unc-news:x", sourceId: "unc-news", providerId: "x", type: "news", title: "T", summary: "S", url: "https://example.edu/x", imageUrl: null, publishedAt: new Date(), startsAt: null, endsAt: null, locationName: null, lat: null, lng: null, locationId: null, category: "news" as const, dedupeKey: "unc-news:https://example.edu/x", createdAt: new Date() };
-    db.insert(schema.externalItems).values(row).onConflictDoNothing().run();
-    db.insert(schema.externalItems).values({ ...row, id: "unc-news:x2", providerId: "x2" }).onConflictDoNothing().run();
-    expect(listExternalItems({ type: "news" }).filter((i) => i.dedupeKey === row.dedupeKey)).toHaveLength(1);
+    (await db.insert(schema.externalItems).values(row).onConflictDoNothing());
+    (await db.insert(schema.externalItems).values({ ...row, id: "unc-news:x2", providerId: "x2" }).onConflictDoNothing());
+    expect((await listExternalItems({ type: "news" })).filter((i) => i.dedupeKey === row.dedupeKey)).toHaveLength(1);
   });
 });
 

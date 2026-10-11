@@ -81,14 +81,14 @@ export async function createPost(author: User | null, input: CreatePostInput, no
     createdAt: new Date(now),
     updatedAt: new Date(now),
   };
-  db.insert(schema.posts).values(post).run();
+  (await db.insert(schema.posts).values(post));
   bump("posts");
   const matches = await runMatching(post.id, now);
   return { post, matches };
 }
 
-export function getPost(id: string): Post | null {
-  return getDb().select().from(schema.posts).where(eq(schema.posts.id, id)).get() ?? null;
+export async function getPost(id: string): Promise<Post | null> {
+  return (await getDb().select().from(schema.posts).where(eq(schema.posts.id, id)).limit(1))[0] ?? null;
 }
 
 export type PostFilters = {
@@ -104,7 +104,7 @@ export type PostFilters = {
 };
 
 /** Live posts, newest first. Expired posts are excluded unless asked for. */
-export function listPosts(f: PostFilters = {}, now = Date.now()): Post[] {
+export async function listPosts(f: PostFilters = {}, now = Date.now()): Promise<Post[]> {
   const db = getDb();
   const conds = [ne(schema.posts.status, "deleted")];
   if (f.type) conds.push(Array.isArray(f.type) ? inArray(schema.posts.type, f.type) : eq(schema.posts.type, f.type));
@@ -116,14 +116,14 @@ export function listPosts(f: PostFilters = {}, now = Date.now()): Post[] {
   if (!f.includeExpired) conds.push(or(isNull(schema.posts.expiresAt), gt(schema.posts.expiresAt, new Date(now)))!);
   if (f.q) {
     const like = `%${f.q.toLowerCase()}%`;
-    conds.push(or(sql`lower(${schema.posts.title}) like ${like}`, sql`lower(${schema.posts.description}) like ${like}`, sql`lower(${schema.posts.keywords}) like ${like}`)!);
+    conds.push(or(sql`lower(${schema.posts.title}) like ${like}`, sql`lower(${schema.posts.description}) like ${like}`, sql`lower(${schema.posts.keywords}::text) like ${like}`)!);
   }
-  return db.select().from(schema.posts).where(and(...conds)).orderBy(desc(schema.posts.createdAt)).limit(f.limit ?? 200).all();
+  return (await db.select().from(schema.posts).where(and(...conds)).orderBy(desc(schema.posts.createdAt)).limit(f.limit ?? 200));
 }
 
-export function updatePost(user: User, id: string, patch: z.infer<typeof UpdatePostSchema>, now = Date.now()): Post {
+export async function updatePost(user: User, id: string, patch: z.infer<typeof UpdatePostSchema>, now = Date.now()): Promise<Post> {
   const db = getDb();
-  const post = getPost(id);
+  const post = (await getPost(id));
   if (!post || post.status === "deleted") throw new ApiError(404, "Post not found");
   if (post.authorId !== user.id) throw new ApiError(403, "Only the author can edit this post");
   const next: Partial<Post> = { updatedAt: new Date(now) };
@@ -142,42 +142,42 @@ export function updatePost(user: User, id: string, patch: z.infer<typeof UpdateP
   if (patch.attributes) next.attributes = { ...post.attributes, ...patch.attributes };
   if (patch.expiry) next.expiresAt = resolveExpiry({ expiry: patch.expiry, expiresAt: patch.expiresAt }, now);
   if (patch.status) next.status = patch.status;
-  db.update(schema.posts).set(next).where(eq(schema.posts.id, id)).run();
+  (await db.update(schema.posts).set(next).where(eq(schema.posts.id, id)));
   bump("posts");
-  const updated = getPost(id)!;
-  if (updated.status === "open") void runMatching(id, now);
+  const updated = (await getPost(id))!;
+  if (updated.status === "open") void (await runMatching(id, now));
   return updated;
 }
 
-export function deletePost(user: User, id: string) {
+export async function deletePost(user: User, id: string) {
   const db = getDb();
-  const post = getPost(id);
+  const post = (await getPost(id));
   if (!post || post.status === "deleted") throw new ApiError(404, "Post not found");
   if (post.authorId !== user.id) throw new ApiError(403, "Only the author can delete this post");
-  db.update(schema.posts).set({ status: "deleted", updatedAt: new Date() }).where(eq(schema.posts.id, id)).run();
-  db.update(schema.matches).set({ status: "cancelled", updatedAt: new Date() })
-    .where(and(or(eq(schema.matches.requestPostId, id), eq(schema.matches.offerPostId, id)), inArray(schema.matches.status, ["suggested", "accepted"]))).run();
+  (await db.update(schema.posts).set({ status: "deleted", updatedAt: new Date() }).where(eq(schema.posts.id, id)));
+  (await db.update(schema.matches).set({ status: "cancelled", updatedAt: new Date() })
+    .where(and(or(eq(schema.matches.requestPostId, id), eq(schema.matches.offerPostId, id)), inArray(schema.matches.status, ["suggested", "accepted"]))));
   bump("posts");
   bump("matches");
 }
 
 /** Mark overdue posts expired and warn authors shortly before. Cheap; called from read paths and the sync route. */
-export function sweepExpirations(now = Date.now()) {
+export async function sweepExpirations(now = Date.now()) {
   const db = getDb();
-  const soon = db.select().from(schema.posts)
-    .where(and(inArray(schema.posts.status, ["open", "matched"]), lte(schema.posts.expiresAt, new Date(now + 15 * MINUTE)), gt(schema.posts.expiresAt, new Date(now)))).all();
+  const soon = (await db.select().from(schema.posts)
+    .where(and(inArray(schema.posts.status, ["open", "matched"]), lte(schema.posts.expiresAt, new Date(now + 15 * MINUTE)), gt(schema.posts.expiresAt, new Date(now)))));
   for (const p of soon) {
-    if (p.authorId) notify(p.authorId, { type: "post_expiring", title: "Post expiring soon", body: `"${p.title}" expires in about ${Math.max(1, Math.round((p.expiresAt!.getTime() - now) / MINUTE))} minutes.`, href: `/connect?post=${p.id}`, dedupeKey: `expiring:${p.id}` });
+    if (p.authorId) (await notify(p.authorId, { type: "post_expiring", title: "Post expiring soon", body: `"${p.title}" expires in about ${Math.max(1, Math.round((p.expiresAt!.getTime() - now) / MINUTE))} minutes.`, href: `/connect?post=${p.id}`, dedupeKey: `expiring:${p.id}` }));
   }
-  const res = db.update(schema.posts).set({ status: "expired", updatedAt: new Date(now) })
-    .where(and(inArray(schema.posts.status, ["open", "matched"]), lte(schema.posts.expiresAt, new Date(now)))).run();
-  if (res.changes > 0) {
-    db.update(schema.matches).set({ status: "cancelled", updatedAt: new Date(now) }).where(and(eq(schema.matches.status, "suggested"),
+  const res = (await db.update(schema.posts).set({ status: "expired", updatedAt: new Date(now) })
+    .where(and(inArray(schema.posts.status, ["open", "matched"]), lte(schema.posts.expiresAt, new Date(now)))));
+  if (res.count > 0) {
+    (await db.update(schema.matches).set({ status: "cancelled", updatedAt: new Date(now) }).where(and(eq(schema.matches.status, "suggested"),
       or(inArray(schema.matches.requestPostId, db.select({ id: schema.posts.id }).from(schema.posts).where(eq(schema.posts.status, "expired"))),
-        inArray(schema.matches.offerPostId, db.select({ id: schema.posts.id }).from(schema.posts).where(eq(schema.posts.status, "expired")))))).run();
+        inArray(schema.matches.offerPostId, db.select({ id: schema.posts.id }).from(schema.posts).where(eq(schema.posts.status, "expired")))))));
     bump("posts");
   }
-  return res.changes;
+  return res.count;
 }
 
 export const REUSE_CATEGORIES = ["borrowing", "giveaway", "lost_found", "ride", "free_food"] as const;
@@ -185,18 +185,18 @@ export const REUSE_CATEGORIES = ["borrowing", "giveaway", "lost_found", "ride", 
 /** Completed connections that kept an existing item in use (borrowed, returned, shared, eaten instead of binned). A count, never a savings claim. */
 export type SharedBreakdown = { total: number; borrowed: number; rehomed: number; returned: number; rides: number; food: number };
 
-export function sharedBreakdown(): SharedBreakdown {
+export async function sharedBreakdown(): Promise<SharedBreakdown> {
   const db = getDb();
-  const rows = db.select({ category: schema.posts.category, c: sql<number>`count(*)` }).from(schema.matches)
+  const rows = (await db.select({ category: schema.posts.category, c: sql<number>`count(*)::int` }).from(schema.matches)
     .innerJoin(schema.posts, eq(schema.posts.id, schema.matches.requestPostId))
     .where(and(eq(schema.matches.status, "completed"), inArray(schema.posts.category, [...REUSE_CATEGORIES])))
-    .groupBy(schema.posts.category).all();
+    .groupBy(schema.posts.category));
   const by = Object.fromEntries(rows.map((r) => [r.category, r.c])) as Partial<Record<string, number>>;
   const b = { borrowed: by.borrowing ?? 0, rehomed: by.giveaway ?? 0, returned: by.lost_found ?? 0, rides: by.ride ?? 0, food: by.free_food ?? 0 };
   return { total: b.borrowed + b.rehomed + b.returned + b.rides + b.food, ...b };
 }
 
-export const sharedCount = () => sharedBreakdown().total;
+export const sharedCount = async () => (await sharedBreakdown()).total;
 
 /** Human sentence for the tally, e.g. "4 borrowed · 2 rehomed · 1 ride shared". Empty when nothing yet. */
 export function sharedSummary(b: SharedBreakdown): string {
@@ -207,12 +207,12 @@ export function sharedSummary(b: SharedBreakdown): string {
   return parts.join(" · ");
 }
 
-export function activityCounts(now = Date.now()) {
-  const live = listPosts({ status: ["open", "matched", "in_progress"] }, now);
+export async function activityCounts(now = Date.now()) {
+  const live = (await listPosts({ status: ["open", "matched", "in_progress"] }, now));
   const since = now - 24 * HOUR;
   return {
-    shared: sharedCount(),
-    sharedBreakdown: sharedBreakdown(),
+    shared: (await sharedCount()),
+    sharedBreakdown: (await sharedBreakdown()),
     live: live.length,
     requests: live.filter((p) => p.type === "request").length,
     offers: live.filter((p) => p.type === "offer").length,

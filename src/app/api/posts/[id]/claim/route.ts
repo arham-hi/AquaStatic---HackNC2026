@@ -9,5 +9,5 @@ type Ctx = { params: Promise<{ id: string }> };
 export const POST = route<Ctx>(async (_req, ctx) => {
   const { id } = await params(ctx);
   const me = await requireUser();
-  return json({ match: claimOffer(me, id) }, { status: 201 });
+  return json({ match: (await claimOffer(me, id)) }, { status: 201 });
 });

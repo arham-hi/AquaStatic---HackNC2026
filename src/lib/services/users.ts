@@ -15,36 +15,36 @@ export const ProfileSchema = z.object({
   notificationPrefs: z.record(z.string(), z.boolean()).optional(),
 });
 
-export function updateProfile(user: User, patch: z.infer<typeof ProfileSchema>): User {
+export async function updateProfile(user: User, patch: z.infer<typeof ProfileSchema>): Promise<User> {
   if (patch.preferredArea && !getLocation(patch.preferredArea)) throw new ApiError(400, "Unknown campus location");
   const db = getDb();
-  db.update(schema.users).set({
+  (await db.update(schema.users).set({
     ...(patch.displayName ? { displayName: patch.displayName } : {}),
     ...(patch.avatar ? { avatar: patch.avatar } : {}),
     ...(patch.interests ? { interests: patch.interests } : {}),
     ...(patch.helpSubjects ? { helpSubjects: patch.helpSubjects } : {}),
     ...(patch.preferredArea !== undefined ? { preferredArea: patch.preferredArea } : {}),
     ...(patch.notificationPrefs ? { notificationPrefs: { ...user.notificationPrefs, ...patch.notificationPrefs } } : {}),
-  }).where(eq(schema.users.id, user.id)).run();
-  return db.select().from(schema.users).where(eq(schema.users.id, user.id)).get()!;
+  }).where(eq(schema.users.id, user.id)));
+  return (await db.select().from(schema.users).where(eq(schema.users.id, user.id)).limit(1))[0]!;
 }
 
-export function getUser(id: string): User | null {
-  return getDb().select().from(schema.users).where(eq(schema.users.id, id)).get() ?? null;
+export async function getUser(id: string): Promise<User | null> {
+  return (await getDb().select().from(schema.users).where(eq(schema.users.id, id)).limit(1))[0] ?? null;
 }
 
-export function toggleBookmark(user: User, itemType: "post" | "external", itemId: string): boolean {
+export async function toggleBookmark(user: User, itemType: "post" | "external", itemId: string): Promise<boolean> {
   const db = getDb();
-  const existing = db.select().from(schema.bookmarks)
-    .where(and(eq(schema.bookmarks.userId, user.id), eq(schema.bookmarks.itemType, itemType), eq(schema.bookmarks.itemId, itemId))).get();
+  const existing = (await db.select().from(schema.bookmarks)
+    .where(and(eq(schema.bookmarks.userId, user.id), eq(schema.bookmarks.itemType, itemType), eq(schema.bookmarks.itemId, itemId))).limit(1))[0];
   if (existing) {
-    db.delete(schema.bookmarks).where(and(eq(schema.bookmarks.userId, user.id), eq(schema.bookmarks.itemType, itemType), eq(schema.bookmarks.itemId, itemId))).run();
+    (await db.delete(schema.bookmarks).where(and(eq(schema.bookmarks.userId, user.id), eq(schema.bookmarks.itemType, itemType), eq(schema.bookmarks.itemId, itemId))));
     return false;
   }
-  db.insert(schema.bookmarks).values({ userId: user.id, itemType, itemId, createdAt: new Date() }).run();
+  (await db.insert(schema.bookmarks).values({ userId: user.id, itemType, itemId, createdAt: new Date() }));
   return true;
 }
 
-export function listBookmarks(user: User) {
-  return getDb().select().from(schema.bookmarks).where(eq(schema.bookmarks.userId, user.id)).all();
+export async function listBookmarks(user: User) {
+  return (await getDb().select().from(schema.bookmarks).where(eq(schema.bookmarks.userId, user.id)));
 }

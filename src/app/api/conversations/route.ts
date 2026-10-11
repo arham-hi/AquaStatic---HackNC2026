@@ -6,5 +6,5 @@ export const dynamic = "force-dynamic";
 
 export const GET = route(async () => {
   const me = await currentUser();
-  return json({ conversations: me ? listConversations(me) : [] });
+  return json({ conversations: me ? (await listConversations(me)) : [] });
 });
