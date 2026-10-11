@@ -123,12 +123,73 @@ test("radio station: Aqua greets, then announces a real new post", async ({ page
   await expect(page.locator('section[aria-label="Now on air"]')).toContainText(/“/);
 
   // A new campus post lands mid-broadcast and the station picks it up.
+  const tPost = Date.now();
   const pr = await page.request.post("/api/posts", {
     data: { title: "Lost keys near the Bell Tower", description: "Lost keys near the Bell Tower — reward if found", type: "request", category: "lost_found", locationId: "bell-tower", expiry: "3h" },
   });
   expect(pr.status()).toBe(201);
   await expect(page.locator('section[aria-label="Recent segments"]')).toContainText(/keys|Bell Tower/i, { timeout: 30000 });
+  console.log(`[station] post → segment on air: ${Date.now() - tPost}ms`);
   await expect(page.locator('section[aria-label="Recent segments"]').getByText(/demo/i).first()).toBeVisible();
+
+  // Mute silences output and is clearly labeled; unmute returns to the live state.
+  await page.getByRole("button", { name: "Mute" }).click();
+  await expect(page.getByText("Muted").first()).toBeVisible();
+  await expect(mascot).toHaveAttribute("data-mascot-state", "muted");
+  await page.getByRole("button", { name: "Unmute" }).click();
+  await expect(mascot).not.toHaveAttribute("data-mascot-state", "muted");
+
+  // Skip advances the queue without breaking the station.
+  const skipBtn = page.getByRole("button", { name: "Skip segment" });
+  if (await skipBtn.isEnabled()) {
+    await skipBtn.click();
+    await expect(page.getByText(/Aqua is speaking|Music playing/i).first()).toBeVisible({ timeout: 15000 });
+  }
+  expect(errors).toEqual([]);
+});
+
+test("live call: Call Aqua greets, answers a typed turn, and restores the radio", async ({ page, request }) => {
+  await reset(request);
+  await switchDemo(page, "u_demo_maya");
+  const errors: string[] = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+
+  // Seed a real post for the call to find.
+  const pr = await page.request.post("/api/posts", {
+    data: { title: "Need a USB-C charger at Davis", description: "Need a USB-C laptop charger at Davis Library", type: "request", category: "borrowing", locationId: "davis-library", expiry: "3h" },
+  });
+  expect(pr.status()).toBe(201);
+
+  await page.goto("/radio");
+  await page.getByRole("button", { name: /^Tune in$/ }).click();
+  await page.getByRole("button", { name: "Call Aqua" }).click();
+
+  const call = page.locator('section[aria-label="Live call with Aqua"]');
+  await expect(call).toBeVisible();
+  await expect(call.getByText("AI host", { exact: true })).toBeVisible();
+  await expect(call.getByText(/Private call/)).toBeVisible();
+  await expect(call.getByText(/not a person/)).toBeVisible();
+
+  // Station controls park while the call runs.
+  await expect(page.getByText(/On a call — the station is parked/)).toBeVisible();
+
+  // Aqua greets aloud — the greeting lands in the transcript and the mascot is in a call state.
+  await expect(call.getByText(/Who do I have on the line/)).toBeVisible({ timeout: 20000 });
+  const mascotState = await page.locator("[data-mascot-state]").getAttribute("data-mascot-state");
+  expect(["tuning", "talking", "thinking", "listening"]).toContain(mascotState);
+
+  // Headless CI has no mic — the typed path proves the same conversation loop.
+  const input = call.getByLabel("Type a message to Aqua");
+  await expect(input).toBeEnabled({ timeout: 25000 }); // enabled once greeting/thinking clears
+  await input.fill("any charger requests?");
+  await call.getByRole("button", { name: "Send message" }).click();
+  await expect(call).toContainText(/charger/i, { timeout: 20000 });
+  await expect(call.getByText(/From the board/)).toBeVisible(); // grounded source card
+
+  // End call → goodbye, then the radio controls come back.
+  await call.getByRole("button", { name: "End call" }).click();
+  await expect(page.getByRole("button", { name: "Call Aqua" })).toBeVisible({ timeout: 30000 });
+  await expect(page.getByText(/Music playing|Aqua is speaking|Muted/i).first()).toBeVisible({ timeout: 20000 });
   expect(errors).toEqual([]);
 });
 

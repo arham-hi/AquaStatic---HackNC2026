@@ -46,6 +46,14 @@ export const BriefingScriptSchema = z.object({
 });
 export type BriefingScript = z.infer<typeof BriefingScriptSchema>;
 
+export const CallReplySchema = z.object({
+  reply: z.string().min(1).max(600),
+  cardIds: z.array(z.string()).max(6).default([]),
+  callerName: z.string().max(40).nullable().default(null),
+  endCall: z.boolean().default(false),
+});
+export type CallReply = z.infer<typeof CallReplySchema>;
+
 export const ExternalClassificationSchema = z.object({
   category: z.enum(POST_CATEGORIES),
   summary: z.string().min(3).max(240),

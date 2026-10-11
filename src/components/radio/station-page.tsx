@@ -2,16 +2,50 @@
 // /radio — the 24/7 station. Aqua the mascot is the centerpiece; Tune in starts the music bed,
 // and real campus activity becomes spoken segments that duck the music while Aqua talks.
 
-import { useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { AudioLines, ExternalLink, ListMusic, Mic, Music2, Radio, RadioTower, SkipForward, Sparkles, Volume2, VolumeX } from "lucide-react";
+import { AudioLines, Ear, EarOff, ExternalLink, ListMusic, Mic, Music2, Phone, Radio, RadioTower, SkipForward, Sparkles, Volume2, VolumeX } from "lucide-react";
 import { Page } from "@/components/shell/app-shell";
 import { Badge } from "@/components/ui/primitives";
 import { cn } from "@/lib/utils";
 import { timeAgo, fmtTime } from "@/lib/time";
 import { AquaMascot } from "./mascot/aqua-mascot";
 import { KIND_LABEL, useStation, type StationSegment } from "./use-station";
+import { useCall } from "./use-call";
+import { CallPanel } from "./call-panel";
 import { Visualizer } from "./visualizer";
+
+// "Hey Aqua" / "Okay Aqua" — opt-in hands-free wake word. Runs a dedicated recognition session
+// only while the station is in music state and no call is active, so it can never self-trigger.
+function useWakeWord(enabled: boolean, active: boolean, onWake: () => void) {
+  const recRef = useRef<{ stop(): void } | null>(null);
+  const onWakeRef = useRef(onWake);
+  onWakeRef.current = onWake;
+  useEffect(() => {
+    if (!enabled || !active) { try { recRef.current?.stop(); } catch { /* noop */ } recRef.current = null; return; }
+    const w = window as unknown as { SpeechRecognition?: new () => never; webkitSpeechRecognition?: new () => never };
+    const Ctor = (w.SpeechRecognition ?? w.webkitSpeechRecognition) as (new () => {
+      lang: string; interimResults: boolean; continuous: boolean;
+      onresult: ((e: { resultIndex: number; results: { isFinal: boolean; 0: { transcript: string } }[] }) => void) | null;
+      onend: (() => void) | null; onerror: (() => void) | null;
+      start(): void; stop(): void;
+    }) | null;
+    if (!Ctor) return;
+    let dead = false;
+    const rec = new Ctor();
+    recRef.current = rec;
+    rec.lang = "en-US"; rec.interimResults = true; rec.continuous = true;
+    rec.onresult = (e) => {
+      for (let i = 0; i < e.results.length; i++) {
+        if (/(hey|okay|ok|hi)\s+aqua/i.test(e.results[i][0].transcript)) { onWakeRef.current(); return; }
+      }
+    };
+    rec.onend = () => { if (!dead) { try { rec.start(); } catch { /* busy */ } } };
+    rec.onerror = () => { /* permission/engine errors end the session; toggle handles re-enable */ };
+    try { rec.start(); } catch { /* noop */ }
+    return () => { dead = true; try { rec.stop(); } catch { /* noop */ } recRef.current = null; };
+  }, [enabled, active]);
+}
 
 const KIND_TONE: Record<string, "red" | "carolina" | "mint" | "violet" | "neutral"> = {
   alert: "red", update: "carolina", event_soon: "violet", roundup: "mint", time_check: "neutral", welcome: "carolina",
@@ -41,10 +75,28 @@ function NowTalkingAbout({ seg }: { seg: StationSegment }) {
 
 export function StationPage() {
   const st = useStation();
-  const kickRef = useRef(0); // Visualizer shares the analyser path; TTS kicks come from its own prop
+  const call = useCall({ suspend: st.suspendStation, resume: st.resumeStation, emitFx: st.emitFx });
+  const kickRef = useRef(0);
   const talking = st.speaking && st.current;
+  const [handsFree, setHandsFree] = useState(false);
+  // Wake word only listens while music is playing and no call is active — never during speech.
+  useWakeWord(handsFree, st.status === "music" && !call.active, () => void call.startCall());
+  const [, setTick] = useState(0); // 1s heartbeat for the "next update" countdown
+  useEffect(() => {
+    if (!st.tunedIn) return;
+    const t = setInterval(() => setTick((n) => n + 1), 1000);
+    return () => clearInterval(t);
+  }, [st.tunedIn]);
 
-  const statusLabel = !st.tunedIn ? "Off air" : st.muted ? "Muted" : talking ? "Aqua is speaking" : "Music bed playing";
+  const mascotState = call.active ? call.mascot : st.mascot;
+  const mascotLevels = call.active ? call.levelsRef : st.levelsRef;
+
+  const statusLabel = call.active ? "Live call" : !st.tunedIn ? "Off air"
+    : st.status === "tuning" ? "Tuning in…"
+    : st.muted ? "Muted"
+    : talking ? "Aqua is speaking"
+    : "Music playing";
+  const nextPollIn = st.tunedIn && st.lastPollAtRef.current ? Math.max(0, 10 - Math.floor((Date.now() - st.lastPollAtRef.current) / 1000)) : null;
 
   return (
     <Page
@@ -67,10 +119,10 @@ export function StationPage() {
         <span aria-hidden className="bubble" style={{ width: 34, height: 34, right: "18%", top: "62%", animationDelay: "-7s" }} />
 
         <div className="relative">
-          <AquaMascot state={st.mascot} levels={st.levelsRef} fx={st.fxRef} className="relative mx-auto h-[300px] w-full max-w-[560px] sm:h-[390px]" />
+          <AquaMascot state={mascotState} levels={mascotLevels} fx={st.fxRef} className="relative mx-auto h-[300px] w-full max-w-[560px] sm:h-[390px]" />
           <div className="pointer-events-none absolute bottom-3 left-1/2 -translate-x-1/2">
-            <Badge tone={talking ? "carolina" : st.tunedIn ? "mint" : "neutral"} className="shadow-sm">
-              <AudioLines className="size-3" />{statusLabel}
+            <Badge tone={call.active || talking ? "carolina" : st.tunedIn ? "mint" : "neutral"} className="shadow-sm">
+              <AudioLines className="size-3" />{call.active ? call.status : statusLabel}
             </Badge>
           </div>
         </div>
@@ -86,6 +138,8 @@ export function StationPage() {
           >
             <Radio className="size-5" /> Tune in
           </button>
+        ) : call.active ? (
+          <Badge tone="carolina" className="px-3 py-2"><Phone className="size-3.5" />On a call — the station is parked</Badge>
         ) : (
           <>
             <button type="button" onClick={st.tuneOut} className="btn-aero aero-button inline-flex h-11 items-center gap-2 rounded-full px-5 text-sm font-bold text-white" aria-label="Tune out">
@@ -111,18 +165,53 @@ export function StationPage() {
                 <SkipForward className="size-5" />
               </button>
             </div>
+            <button
+              type="button"
+              onClick={() => void call.startCall()}
+              className="btn-aero aero-button inline-flex h-11 items-center gap-2 rounded-full bg-gradient-to-br from-violet-500 to-fuchsia-500 px-5 text-sm font-bold text-white"
+              aria-label="Call Aqua"
+            >
+              <Phone className="size-4" /> Call Aqua
+            </button>
+            <button
+              type="button"
+              onClick={() => setHandsFree((v) => !v)}
+              aria-pressed={handsFree}
+              title={handsFree ? 'Hands-free on — say "Hey Aqua"' : "Enable hands-free wake word"}
+              className={cn("aero-button inline-flex h-11 items-center gap-1.5 rounded-full border border-border bg-bg-elev/80 px-3 text-xs font-semibold transition-colors",
+                handsFree ? "text-violet-600 border-violet-300" : "text-fg-muted hover:text-carolina")}
+            >
+              {handsFree ? <Ear className="size-4" /> : <EarOff className="size-4" />}
+              {handsFree ? 'Say "Hey Aqua"' : "Hands-free"}
+            </button>
           </>
         )}
 
         <div className="min-w-0 flex-1">
           <Visualizer analyser={st.musicAnalyser} active={st.tunedIn && !st.muted} kickRef={kickRef} className="h-10 text-carolina/80" />
         </div>
-        <p className="hidden text-xs font-medium text-fg-muted sm:block">{statusLabel}</p>
+        <div className="hidden text-right sm:block">
+          <p className="text-xs font-medium text-fg-muted">{statusLabel}</p>
+          {st.tunedIn && (
+            <p className="text-[11px] text-fg-faint">
+              {st.queueLength > 0 ? `Next up: ${st.queueLength} segment${st.queueLength === 1 ? "" : "s"}` : nextPollIn != null ? `Next update ~${nextPollIn}s` : "Listening for new posts"}
+            </p>
+          )}
+        </div>
       </section>
 
+      {st.audioError && (
+        <p className="mt-2 flex items-center gap-1.5 text-xs text-amber" role="alert">
+          <Badge tone="amber">Audio error</Badge> {st.audioError}
+        </p>
+      )}
       {st.notice && <p className="mt-2 text-xs text-amber">{st.notice}</p>}
 
+      {/* ---- live call takes over the middle of the page ---- */}
+      {call.active && <CallPanel call={call} />}
+
       {/* ---- on air ---- */}
+      {!call.active && (
       <div className="mt-5 grid gap-4 lg:grid-cols-2">
         <section aria-label="Now on air" className="card rounded-[24px] p-5">
           <div className="aero-eyebrow !mb-2"><AudioLines className="size-3" /> Now on air</div>
@@ -146,6 +235,7 @@ export function StationPage() {
           )}
         </section>
       </div>
+      )}
 
       {/* ---- recent segments ---- */}
       <section aria-label="Recent segments" className="mt-4 card rounded-[24px] p-5">
