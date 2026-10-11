@@ -91,7 +91,7 @@ export function HomeMap() {
     let stale = false;
     api.get<{ match: MatchView }>(`/api/matches/${focusId}`)
       .then((r) => { if (!stale) { setFocusMatch(r.match); setSelected(null); } })
-      .catch((e: Error) => { if (!stale) { toast.error(e.message || "Couldn't load that match"); router.replace("/"); } });
+      .catch((e: Error) => { if (!stale) { toast.error(e.message || "Couldn't load that match"); router.replace("/map"); } });
     return () => { stale = true; };
   }, [focusId, router]);
 
@@ -126,7 +126,7 @@ export function HomeMap() {
     }
   }, [focused, handle]);
 
-  const closeFocus = () => { setFocusMatch(null); if (params.get("match")) router.replace("/"); };
+  const closeFocus = () => { setFocusMatch(null); if (params.get("match")) router.replace("/map"); };
 
   // New match → arc on the map + one toast.
   const connections = useMemo<ConnectionLine[]>(() => {

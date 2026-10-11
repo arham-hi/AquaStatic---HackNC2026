@@ -135,7 +135,7 @@ function DemoControls() {
       toast.success(`Posted as Jordan — ${r.matches.length} match${r.matches.length === 1 ? "" : "es"} found`, m ? { action: { label: "Open match", onClick: () => router.push(`/connect?match=${m.id}`) } } : undefined);
     } },
     { key: "radio", label: "Generate radio briefing", icon: Radio, variant: "mint", fn: async () => { await api.post("/api/briefings", { format: "radio", length: "medium", interests: [] }); router.push("/radio"); } },
-    { key: "map", label: "Open Davis Library on map", icon: MapPin, variant: "secondary", fn: async () => { focusMap({ lat: 35.9108, lng: -79.0481, label: "Davis Library" }); router.push("/"); } },
+    { key: "map", label: "Open Davis Library on map", icon: MapPin, variant: "secondary", fn: async () => { focusMap({ lat: 35.9108, lng: -79.0481, label: "Davis Library" }); router.push("/map"); } },
   ];
 
   return (

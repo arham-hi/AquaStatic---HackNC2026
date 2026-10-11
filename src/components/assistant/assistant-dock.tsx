@@ -112,7 +112,7 @@ export function AssistantDock() {
                     </div>
                   )}
                   <div className="flex flex-wrap gap-1.5 items-center">
-                    {t.reply.mapFocus && <Button size="sm" variant="secondary" onClick={() => { focusMap({ lat: t.reply!.mapFocus!.lat, lng: t.reply!.mapFocus!.lng, label: t.reply!.mapFocus!.label }); router.push("/"); }}><MapPin /> Show on map</Button>}
+                    {t.reply.mapFocus && <Button size="sm" variant="secondary" onClick={() => { focusMap({ lat: t.reply!.mapFocus!.lat, lng: t.reply!.mapFocus!.lng, label: t.reply!.mapFocus!.label }); router.push("/map"); }}><MapPin /> Show on map</Button>}
                     {t.reply.draft && <Button size="sm" onClick={() => { setDraftCtx(null); setAssistantOpen(false); openCreate(t.reply!.awaiting?.context ?? turns[i - 1]?.text); }}><FilePlus2 /> Review & post</Button>}
                     {(t.reply.intent === "find_offers" || t.reply.intent === "find_help") && t.reply.sources.length === 0 && (
                       <Button size="sm" variant="secondary" onClick={() => void send(`Post this for me: ${turns[i - 1]?.text ?? ""}`)}><FilePlus2 /> Post this as a request</Button>

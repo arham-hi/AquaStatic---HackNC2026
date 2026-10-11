@@ -339,6 +339,30 @@ body {
 [data-theme="dark"] .aero-nav-link[aria-current="page"], [data-theme="dark"] .aero-tabs [data-state="active"] { background: linear-gradient(145deg, rgba(62,129,162,.5), rgba(27,75,102,.6)); }
 [data-theme="dark"] .aero-topbar { background: linear-gradient(180deg, rgba(9,29,42,.8), rgba(9,29,42,.46)); }
 [data-theme="dark"] .aero-topbar.is-overlay { background: transparent; }
+
+/* ---------- Landing page ---------- */
+@keyframes marquee { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+.marquee-track { animation: marquee 44s linear infinite; }
+.marquee-track:hover { animation-play-state: paused; }
+@keyframes drift { 0%, 100% { transform: translate3d(0, 0, 0); } 50% { transform: translate3d(0, -14px, 0); } }
+.animate-drift { animation: drift 7s ease-in-out infinite; }
+.text-liquid {
+  background: linear-gradient(100deg, #087ab9 0%, #0db9e8 28%, #2fbf8f 55%, #087ab9 85%);
+  background-size: 230% 100%;
+  -webkit-background-clip: text; background-clip: text;
+  color: transparent;
+  animation: liquid-shift 7s ease-in-out infinite;
+}
+@keyframes liquid-shift { 0%, 100% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } }
+[data-theme="dark"] .text-liquid {
+  background-image: linear-gradient(100deg, #9fdcff 0%, #62b0e3 30%, #7ef0c4 60%, #9fdcff 90%);
+}
+.bubble-pop-ring {
+  position: absolute; border-radius: 50%; pointer-events: none;
+  border: 2px solid rgba(255, 255, 255, 0.9);
+  box-shadow: 0 0 0 2px var(--carolina-soft), inset 0 0 12px rgba(160, 225, 255, 0.6);
+  animation: pulse-ring 0.45s ease-out forwards;
+}
 [data-theme="dark"] .aero-account-control { background: var(--surface); }
 [data-theme="dark"] .maplibregl-ctrl-icon { filter: invert(1); }
 @media (max-width: 767px) {

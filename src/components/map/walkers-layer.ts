@@ -9,6 +9,8 @@ import { softShadowTexture } from "@/lib/soft-shadow";
 
 export const WALKERS_LAYER_ID = "aero-walkers";
 const COUNT = 70;                 // how many people
+const SPEED = 7;                 // ground-speed exaggeration: walkers render ~30-65x life-size, so real walking speed looks frozen
+const SIZE = 0.98;                // global size tweak on top of the zoom-aware scale
 const AREA = 0.012;               // degrees around campus center to look for paths (~1.3 km)
 const PREFERRED = ["path", "pedestrian", "track"];
 const FALLBACK = ["minor", "service"]; // used only if the map has too few footpaths loaded
@@ -120,7 +122,7 @@ function createWalkersLayer(lines: Line[], origin: maplibregl.MercatorCoordinate
     const shadow = new THREE.Mesh(shadowGeo, shadowMat);
     scene.add(shadow);
     const line = chooseLine();
-    return { g, shadow, legs, arms, line, dist: rand() * line.length, dir: rand() < 0.5 ? 1 : -1, speed: 1.1 + rand() * 0.7, phase: rand() * 6, heading: 0 };
+    return { g, shadow, legs, arms, line, dist: rand() * line.length, dir: rand() < 0.5 ? 1 : -1, speed: (1.1 + rand() * 0.7) * SPEED, phase: rand() * 6, heading: 0 };
   });
 
   let renderer: THREE.WebGLRenderer;
@@ -143,7 +145,7 @@ function createWalkersLayer(lines: Line[], origin: maplibregl.MercatorCoordinate
       const show = zoom >= 14.4;
       // Zoom-aware exaggeration: people stay much larger than life so they read at the
       // default campus view, then ease back toward sane sizes as you zoom in.
-      const scale = Math.min(65, Math.max(5.5, 30 * 2 ** ((15.6 - zoom) * 0.5)));
+      const scale = Math.min(65, Math.max(5.5, 30 * 2 ** ((15.6 - zoom) * 0.5))) * SIZE;
       for (const w of walkers) {
         w.g.visible = show;
         w.shadow.visible = show;
@@ -161,7 +163,7 @@ function createWalkersLayer(lines: Line[], origin: maplibregl.MercatorCoordinate
         w.heading += delta * Math.min(1, dt * 8 + (dt === 0 ? 1 : 0));
         w.g.rotation.y = w.heading;
         w.g.scale.setScalar(scale);
-        w.phase += dt * w.speed * 5.5;
+        w.phase += dt * w.speed * 1.2;
         const swing = Math.sin(w.phase);
         w.legs[0].rotation.x = swing * 0.7; w.legs[1].rotation.x = -swing * 0.7;
         w.arms[0].rotation.x = -swing * 0.5; w.arms[1].rotation.x = swing * 0.5;

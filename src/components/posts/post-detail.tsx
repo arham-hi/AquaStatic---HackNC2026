@@ -79,7 +79,7 @@ export function PostDetail({ item, onClose, className }: { item: FeedItem; onClo
         {post?.attributes.destination && (<><dt className="text-fg-faint flex items-center gap-1"><Car className="size-3.5" />Going to</dt><dd>{post.attributes.destination}</dd></>)}
         {(live.locationName || post?.locationNote) && (<><dt className="text-fg-faint flex items-center gap-1"><MapPin className="size-3.5" />Where</dt><dd>{live.locationName}{post?.locationNote ? ` · ${post.locationNote}` : ""}</dd></>)}
         {live.expiresAt && isPost && (<><dt className="text-fg-faint flex items-center gap-1"><Hourglass className="size-3.5" />Expires</dt><dd>{timeUntil(live.expiresAt)} · {fmtDateTime(live.expiresAt)}</dd></>)}
-        {nearest.data?.stop && (<><dt className="text-fg-faint flex items-center gap-1"><Bus className="size-3.5" />Bus</dt><dd className="truncate">{nearest.data.stop.name} · {nearest.data.stop.meters} m{nearest.data.stop.routes.length ? ` · ${nearest.data.stop.routes.join(", ")}` : ""} · <Link href="/?buses=1" className="text-carolina hover:underline">routes</Link></dd></>)}
+        {nearest.data?.stop && (<><dt className="text-fg-faint flex items-center gap-1"><Bus className="size-3.5" />Bus</dt><dd className="truncate">{nearest.data.stop.name} · {nearest.data.stop.meters} m{nearest.data.stop.routes.length ? ` · ${nearest.data.stop.routes.join(", ")}` : ""} · <Link href="/map?buses=1" className="text-carolina hover:underline">routes</Link></dd></>)}
         <dt className="text-fg-faint">Source</dt>
         <dd className="truncate">{isPost ? (data?.author ? `${data.author.avatar} ${data.author.displayName}` : loading ? <Skeleton className="w-24 inline-block" /> : "Community") : live.sourceLabel}</dd>
       </dl>
@@ -110,7 +110,7 @@ export function PostDetail({ item, onClose, className }: { item: FeedItem; onClo
       )}
 
       <div className="mt-4 flex flex-wrap gap-2">
-        {live.lat != null && <Button size="sm" variant="secondary" onClick={() => { focusMap({ lat: live.lat!, lng: live.lng!, label: live.locationName ?? live.title, itemId: live.id }); router.push("/"); }}><MapPin /> Map</Button>}
+        {live.lat != null && <Button size="sm" variant="secondary" onClick={() => { focusMap({ lat: live.lat!, lng: live.lng!, label: live.locationName ?? live.title, itemId: live.id }); router.push("/map"); }}><MapPin /> Map</Button>}
         <Button size="sm" variant="secondary" onClick={() => void toggleSave(live, setSaved)}>{saved ? <BookmarkCheck className="text-carolina" /> : <Bookmark />}{saved ? "Saved" : "Save"}</Button>
         <Button size="sm" variant="secondary" onClick={() => void shareItem(live)}><Share2 /> Share</Button>
         {live.url && <Button size="sm" variant="secondary" asChild><a href={live.url} target="_blank" rel="noreferrer"><ExternalLink /> Open source</a></Button>}

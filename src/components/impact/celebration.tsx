@@ -101,7 +101,7 @@ export function Celebration({ match, onClose }: { match: MatchView; onClose: () 
             <Link href="/impact"><Leaf /> View AquaImpact</Link>
           </Button>
           <Button variant="secondary" asChild>
-            <Link href="/"><MapIcon /> Back to campus</Link>
+            <Link href="/map"><MapIcon /> Back to campus</Link>
           </Button>
         </div>
       </motion.div>

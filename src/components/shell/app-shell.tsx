@@ -10,17 +10,18 @@ import { AssistantDock } from "@/components/assistant/assistant-dock";
 import { cn } from "@/lib/utils";
 import { PageBubbles } from "./bubbles";
 
-/** Layout chrome. The home page renders the top bar as an overlay on the map; other pages get a sticky bar. */
+/** Layout chrome. The map page renders the top bar as an overlay; the landing page brings its own header; other pages get a sticky bar. */
 export function AppShell({ children }: { children: ReactNode }) {
   const path = usePathname();
-  const isMap = path === "/";
+  const isMap = path === "/map";
+  const isLanding = path === "/";
   return (
     <TooltipProvider>
       <div className="min-h-dvh aero-bg">
         <NavRail />
-        {!isMap && <PageBubbles />}
-        {!isMap && <TopBar />}
-        <main className={cn("md:ml-[72px] relative z-10", isMap ? "h-dvh" : "pb-24 md:pb-10")}>{children}</main>
+        {!isMap && !isLanding && <PageBubbles />}
+        {!isMap && !isLanding && <TopBar />}
+        <main className={cn("md:ml-[72px] relative z-10", isMap ? "h-dvh" : isLanding ? "" : "pb-24 md:pb-10")}>{children}</main>
         <BottomNav />
         <Fab />
         <CreatePostDialog />

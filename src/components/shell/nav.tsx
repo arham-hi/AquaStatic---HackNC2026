@@ -8,7 +8,7 @@ import { useUI } from "./providers";
 import { Tip } from "@/components/ui/primitives";
 
 export const NAV = [
-  { href: "/", label: "Live Map", icon: MapIcon },
+  { href: "/map", label: "Live Map", icon: MapIcon },
   { href: "/radio", label: "Radio", icon: Radio },
   { href: "/connect", label: "Connect", icon: HeartHandshake },
   { href: "/impact", label: "Impact", icon: Leaf },

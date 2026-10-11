@@ -10,7 +10,7 @@ import { toRecord } from "./briefings";
 import { loadTransit, OFFICIAL_TRACKING_URL } from "./transit";
 import { createPost, CreatePostSchema, type CreatePostInput } from "./posts";
 import type { ParseResult } from "@/lib/ai/types";
-import type { User } from "@/lib/db/schema";
+import type { Post, User } from "@/lib/db/schema";
 
 export type AssistantSource = { id: string; title: string; href: string; kind: string; at: number | null; isDemo: boolean; external: boolean };
 export type AssistantReply = {
@@ -68,6 +68,26 @@ function toCreateInput(d: ParseResult, raw: string, now: number): CreatePostInpu
   };
 }
 
+export type PostOutcome =
+  | { outcome: "posted"; post: Post; matchCount: number; draft: ParseResult }
+  | { outcome: "missing"; draft: ParseResult; missing: string[] }
+  | { outcome: "invalid"; draft: ParseResult };
+
+/**
+ * Parse a "post this" message into a board draft and publish it when nothing is missing.
+ * Shared by the chat assistant and the live radio call. Pass a pre-parsed draft to skip re-parsing.
+ */
+export async function postFromText(user: User | null, text: string, now: number, draft?: ParseResult): Promise<PostOutcome> {
+  const d = draft ?? (await parsePost(text, now));
+  const missing = missingFor(d);
+  if (missing.length) return { outcome: "missing", draft: d, missing };
+  const parsed = CreatePostSchema.safeParse(toCreateInput(d, text, now));
+  if (!parsed.success) return { outcome: "invalid", draft: d };
+  const me = user ?? (await requireUser());
+  const { post, matches } = await createPost(me, parsed.data, now);
+  return { outcome: "posted", post, matchCount: matches.length, draft: d };
+}
+
 /**
  * Turn a "post this for me" message into either a published post, a follow-up question
  * for the one detail that's missing, or (channels only) a draft for explicit confirm.
@@ -86,35 +106,31 @@ async function postFor(user: User | null, text: string, provider: "gemini" | "lo
     };
   }
 
-  const missing = missingFor(draft);
-  if (missing.length) {
-    const first = ["location", "time", "item"].find((k) => missing.includes(k))!;
+  const res = await postFromText(user, text, now, draft);
+  if (res.outcome === "missing") {
+    const first = ["location", "time", "item"].find((k) => res.missing.includes(k))!;
     const askQ = first === "location" ? (draft.type === "event" ? "Where on campus is it happening?" : "Where are you on campus?")
       : first === "time" ? "When does it start? (\"tonight at 7\", \"in 2 hours\"…)"
       : draft.category === "ride" ? "Where are you headed?" : "What exactly is the item?";
     return {
       answer: `On it — posting ${kindLabel}: "${draft.title}". One thing first: ${askQ}`,
       sources: [], provider: p, intent: "create_post", draft, posted: null,
-      awaiting: { context: text.slice(0, 700), missing }, mapFocus,
+      awaiting: { context: text.slice(0, 700), missing: res.missing }, mapFocus,
     };
   }
-
-  const parsed = CreatePostSchema.safeParse(toCreateInput(draft, text, now));
-  if (!parsed.success) {
+  if (res.outcome === "invalid") {
     return {
       answer: `I drafted "${draft.title}" but a couple of details need a human eye — open the editor to publish it.`,
       sources: [], provider: p, intent: "create_post", draft, posted: null,
       awaiting: { context: text.slice(0, 700), missing: [] }, mapFocus,
     };
   }
-  const me = user ?? (await requireUser());
-  const { post, matches } = await createPost(me, parsed.data, now);
   const where = loc ? ` at ${loc.name}` : "";
-  const matched = matches.length ? ` It already matched ${matches.length} other post${matches.length > 1 ? "s" : ""}.` : "";
+  const matched = res.matchCount ? ` It already matched ${res.matchCount} other post${res.matchCount > 1 ? "s" : ""}.` : "";
   return {
-    answer: `Done — "${post.title}" is live on Connect${where}.${matched} If anything's off, undo it below or edit the post from Connect.`,
+    answer: `Done — "${res.post.title}" is live on Connect${where}.${matched} If anything's off, undo it below or edit the post from Connect.`,
     sources: [], provider: p, intent: "create_post", draft: null,
-    posted: { id: post.id, title: post.title, href: `/connect?post=${post.id}`, matches: matches.length },
+    posted: { id: res.post.id, title: res.post.title, href: `/connect?post=${res.post.id}`, matches: res.matchCount },
     awaiting: null, mapFocus,
   };
 }

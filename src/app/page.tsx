@@ -1,10 +1,5 @@
-import { Suspense } from "react";
-import { HomeMap } from "@/components/map/home-map";
+import { LandingPage } from "@/components/landing/landing-page";
 
 export default function Home() {
-  return (
-    <Suspense fallback={<div className="h-dvh grid place-items-center text-fg-muted text-sm">Loading Chapel Hill…</div>}>
-      <HomeMap />
-    </Suspense>
-  );
+  return <LandingPage />;
 }

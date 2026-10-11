@@ -1,13 +1,15 @@
 # Aqua Static — 2-minute live demo for HackNC judges
 
-**Setup (before judges arrive):** `npm run setup && npm run dev`. Open `http://localhost:3000` in **two browser windows** side by side (or one normal + one incognito). In window A pick **Aadee (Demo)** from the demo profile switcher (Profile → Demo profiles, or `/developer`). In window B pick **Jordan (demo)**. Keep `/developer` open in a third tab as your remote. Dark theme looks best on a projector.
+**Setup (before judges arrive):** `npm run setup && npm run dev`. Open `http://localhost:3000` in **two browser windows** side by side (or one normal + one incognito) — both start on the landing page; click **Enter the live map** (or go straight to `/map`). In window A pick **Aadee (Demo)** from the demo profile switcher (Profile → Demo profiles, or `/developer`). In window B pick **Jordan (demo)**. Keep `/developer` open in a third tab as your remote. Dark theme looks best on a projector.
 
 Everything on screen marked **DEMO** is simulated sample data. Nothing else is touched by the seed or the reset.
 
 ---
 
-### 0:00 — A living campus (window A, home map)
+### 0:00 — A living campus (window A, landing → map)
 > "Campus life is scattered across email, group chats, Instagram and flyers. Aqua Static turns it into one live layer: a real 3D map of Chapel Hill."
+
+- Start on the landing — Aqua the host is live on air, the ticker is pulling real posts, the counters are real database counts. Click a bubble (they pop), then **Enter the live map**.
 
 - The map already shows a real community: amber requests, mint offers, purple lost & found, green giveaways, teal food, plus the bus layer. Every pin is a real post in the database — the demo ones are labeled DEMO.
 - Drag to rotate, scroll to tilt. Click a marker → the detail card shows how the AI read it (type, item, urgency, expiry).

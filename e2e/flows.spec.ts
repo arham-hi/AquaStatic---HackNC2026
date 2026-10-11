@@ -14,7 +14,7 @@ test.describe.configure({ mode: "serial" });
 
 test("homepage loads the 3D map with demo markers and live counts", async ({ page, request }) => {
   await reset(request);
-  await page.goto("/");
+  await page.goto("/map");
   await expect(page.getByRole("heading", { name: /Good (morning|afternoon|evening|night), Carolina/ })).toBeVisible();
   await expect(page.locator("canvas.maplibregl-canvas")).toBeVisible({ timeout: 30000 });
   await expect(page.locator(".marker").first()).toBeVisible({ timeout: 30000 });
@@ -87,7 +87,7 @@ test("two users: request → offer → match → accept both → chat → comple
   await expect(pm.getByText(/connected|accepted|match/i).first()).toBeVisible();
 
   // Assistant is grounded in the stored request.
-  await pm.goto("/");
+  await pm.goto("/map");
   await pm.getByRole("button", { name: "Ask a question" }).click();
   await pm.getByPlaceholder("Ask anything about campus…").fill("What help requests are there around Davis Library?");
   await pm.keyboard.press("Enter");
@@ -195,7 +195,7 @@ test("live call: Call Aqua greets, answers a typed turn, and restores the radio"
 
 test("old transit links open the live map's bus overlay with schedule data and the official tracker", async ({ page }) => {
   await page.goto("/transit");
-  await expect(page).toHaveURL(/\/\?buses=1/);
+  await expect(page).toHaveURL(/\/map\?buses=1/);
   await expect(page.getByRole("complementary", { name: "Bus routes and stops" })).toBeVisible();
   await expect(page.getByText(/schedule data|demo route geometry/i).first()).toBeVisible({ timeout: 60000 });
   await expect(page.getByRole("link", { name: /official tracker|mychtransit/i }).first()).toBeVisible();

@@ -14,6 +14,7 @@ const { getDb, schema } = await import("@/lib/db/client");
 const { createPost, CreatePostSchema } = await import("@/lib/services/posts");
 const { ensureDemoUsers, syncLocations } = await import("@/lib/services/demo");
 const { startCall, callTurn, endCall, dropSession } = await import("@/lib/services/call");
+const { listPosts } = await import("@/lib/services/posts");
 const { generateJson } = await import("@/lib/ai/gemini");
 const { env } = await import("@/lib/env");
 import type { User } from "@/lib/db/schema";
@@ -128,6 +129,42 @@ describe("live call service", () => {
     expect(t.provider).toBe("gemini");
     expect(t.reply).toContain("pizza study sesh");
     expect(t.cards.map((c) => c.id)).toEqual([`post:${p.id}`]);
+  });
+
+  it("posts a request to the board when the caller asks for one", async () => {
+    const s = sid();
+    const t = await callTurn(s, "can you add a request for a Chromebook charger at Davis Library please", Date.now(), undefined, maya);
+    expect(t.acted).toBe(true);
+    expect(t.posted?.href).toBe(`/connect?post=${t.posted!.id}`);
+    expect(t.draftContext).toBeNull();
+    const stored = (await listPosts()).find((p) => p.id === t.posted!.id);
+    expect(stored?.type).toBe("request");
+    expect(t.cards.map((c) => c.id)).toContain(t.posted!.id);
+  });
+
+  it("asks for a missing detail, then posts on the follow-up", async () => {
+    const s = sid();
+    const first = await callTurn(s, "add a request for a calculator please", Date.now(), undefined, maya);
+    expect(first.posted).toBeNull();
+    expect(first.draftContext).toBeTruthy();
+    expect(first.reply.toLowerCase()).toMatch(/where|campus/);
+    // Cold-server turn: the client echoes draftContext back like callerName.
+    const second = await callTurn(sid(), "at davis library", Date.now(), {
+      history: [{ role: "user", text: "add a request for a calculator please" }, { role: "aqua", text: first.reply }],
+      callerName: null, draftContext: first.draftContext,
+    }, maya);
+    expect(second.posted).toBeTruthy();
+    expect(second.draftContext).toBeNull();
+    const stored = (await listPosts()).find((p) => p.id === second.posted!.id);
+    expect(stored?.locationId).toBe("davis-library");
+  });
+
+  it("a clear new question drops a pending call draft", async () => {
+    const s = sid();
+    await callTurn(s, "add a request for a calculator please", Date.now(), undefined, maya);
+    const t = await callTurn(s, "what events are happening on campus tonight?", Date.now(), undefined, maya);
+    expect(t.posted).toBeNull();
+    expect(t.draftContext).toBeNull();
   });
 
   it("falls back to the local persona when Gemini fails", async () => {

@@ -20,7 +20,7 @@ export const env = {
   // Demo mode defaults ON in development and OFF in production unless explicitly enabled.
   demoMode: isProd ? process.env.DEMO_MODE === "true" : process.env.DEMO_MODE !== "false",
   appBaseUrl: process.env.APP_BASE_URL || "http://localhost:3000",
-  gemini: { apiKey: process.env.GEMINI_API_KEY || "", model: process.env.GEMINI_MODEL || "gemini-3.8-flash" },
+  gemini: { apiKey: process.env.GEMINI_API_KEY || "", model: process.env.GEMINI_MODEL || "gemini-3.5-flash-lite" },
   elevenlabs: {
     apiKey: process.env.ELEVENLABS_API_KEY || "",
     voiceId: process.env.ELEVENLABS_VOICE_ID || "cgSgspJ2msm6clMCkdW9",

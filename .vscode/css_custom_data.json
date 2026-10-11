@@ -1,0 +1,45 @@
+{
+  "version": 1.1,
+  "atDirectives": [
+    {
+      "name": "@custom-variant",
+      "description": "Tailwind CSS v4: define a custom variant, e.g. @custom-variant dark (&:where(.dark, .dark *));",
+      "references": [{ "name": "Tailwind CSS docs", "url": "https://tailwindcss.com/docs/functions-and-directives#custom-variant-directive" }]
+    },
+    {
+      "name": "@theme",
+      "description": "Tailwind CSS v4: define design tokens (colors, fonts, shadows…) that become theme variables and utilities.",
+      "references": [{ "name": "Tailwind CSS docs", "url": "https://tailwindcss.com/docs/functions-and-directives#theme-directive" }]
+    },
+    {
+      "name": "@utility",
+      "description": "Tailwind CSS v4: define a custom utility class.",
+      "references": [{ "name": "Tailwind CSS docs", "url": "https://tailwindcss.com/docs/functions-and-directives#utility-directive" }]
+    },
+    {
+      "name": "@variant",
+      "description": "Tailwind CSS v4: apply a variant to a block of styles.",
+      "references": [{ "name": "Tailwind CSS docs", "url": "https://tailwindcss.com/docs/functions-and-directives#variant-directive" }]
+    },
+    {
+      "name": "@source",
+      "description": "Tailwind CSS v4: register a source path for content scanning.",
+      "references": [{ "name": "Tailwind CSS docs", "url": "https://tailwindcss.com/docs/functions-and-directives#source-directive" }]
+    },
+    {
+      "name": "@plugin",
+      "description": "Tailwind CSS v4: load a legacy JS plugin.",
+      "references": [{ "name": "Tailwind CSS docs", "url": "https://tailwindcss.com/docs/functions-and-directives#plugin-directive" }]
+    },
+    {
+      "name": "@reference",
+      "description": "Tailwind CSS v4: import theme variables into a CSS module or Vue/ Svelte <style> block.",
+      "references": [{ "name": "Tailwind CSS docs", "url": "https://tailwindcss.com/docs/functions-and-directives#reference-directive" }]
+    },
+    {
+      "name": "@config",
+      "description": "Tailwind CSS v4: load a legacy JS config file.",
+      "references": [{ "name": "Tailwind CSS docs", "url": "https://tailwindcss.com/docs/functions-and-directives#config-directive" }]
+    }
+  ]
+}

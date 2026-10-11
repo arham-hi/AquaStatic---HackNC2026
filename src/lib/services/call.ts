@@ -8,8 +8,10 @@ import { composeCallReply, type GroundingRecord } from "@/lib/ai";
 import { fmtTime, fmtDay, HOUR } from "@/lib/time";
 import { listFeed, type FeedItem } from "./feed";
 import { toRecord } from "./briefings";
+import { postFromText } from "./assistant";
 import type { AssistantSource } from "./assistant";
 import type { QueryIntent } from "@/lib/ai/types";
+import type { User } from "@/lib/db/schema";
 
 export type CallCard = AssistantSource;
 export type CallTurn = {
@@ -18,6 +20,9 @@ export type CallTurn = {
   callerName: string | null;
   provider: "gemini" | "local";
   endCall: boolean;
+  draftContext: string | null; // mid-draft post text — the client echoes it back so drafts survive cold sessions
+  posted: { id: string; title: string; href: string } | null; // a post we just published for the caller
+  acted: boolean; // the turn ran a board action — the reply matters even without Gemini
 };
 
 type Session = {
@@ -25,10 +30,11 @@ type Session = {
   history: { role: "user" | "aqua"; text: string }[];
   lastIntent: QueryIntent["intent"] | null;
   lastKeywords: string[];
+  draftContext: string | null;
   touched: number;
 };
 
-export type CallContext = { history: Session["history"]; callerName: string | null };
+export type CallContext = { history: Session["history"]; callerName: string | null; draftContext?: string | null };
 
 const sessions = new Map<string, Session>();
 const SESSION_TTL = 30 * 60 * 1000;
@@ -45,7 +51,7 @@ function getSession(id: string): Session {
       for (const [k, v] of sessions) if (!oldest || v.touched < sessions.get(oldest)!.touched) oldest = k;
       if (oldest) sessions.delete(oldest);
     }
-    s = { callerName: null, history: [], lastIntent: null, lastKeywords: [], touched: 0 };
+    s = { callerName: null, history: [], lastIntent: null, lastKeywords: [], draftContext: null, touched: 0 };
     sessions.set(id, s);
   }
   s.touched = Date.now();
@@ -60,7 +66,7 @@ const GREETING = "Yoooo, looks like we've got someone calling in! Welcome to Aqu
 
 export function startCall(sessionId: string): CallTurn {
   getSession(sessionId);
-  return { reply: GREETING, cards: [], callerName: null, provider: "local", endCall: false };
+  return { reply: GREETING, cards: [], callerName: null, provider: "local", endCall: false, draftContext: null, posted: null, acted: false };
 }
 
 const NAME_RE = /^(?:hey,? |hi,? |yo,? |uh,? )?(?:i'?m|i am|it'?s|this is|my name'?s? (?:is )?|call me|they call me) ([a-z][a-z'-]{1,20})/i;
@@ -167,19 +173,65 @@ function localReply(message: string, s: Session, picked: FeedItem[], intent: str
   return `${lead} ${one}.${more}${demo}${cta}`;
 }
 
+// Intents that clearly mean "answer a question" — a short fragment like "Davis" or "a Chromebook
+// charger" mid-draft completes the post instead of changing the topic.
+const RETRIEVAL_INTENTS = new Set(["whats_happening", "find_help", "find_offers", "events", "food", "transit", "news", "alerts"]);
+const QUESTIONY = /^(what|what'?s|who|where|when|which|how|any|is|are|do|does|show|list|tell me|can you tell|could you tell)\b|\?\s*$/i;
+const CANCEL = /^(?:nah|nope|no thanks?|never ?mind|nvm|forget it|cancel|stop|don'?t post|actually never mind)[.!\s]*$/i;
+
 // ---------- the turn ----------
 
-export async function callTurn(sessionId: string, message: string, now = Date.now(), context?: CallContext): Promise<CallTurn> {
+export async function callTurn(sessionId: string, message: string, now = Date.now(), context?: CallContext, user: User | null = null): Promise<CallTurn> {
   // The browser carries its own recent transcript. This is conversation context,
   // never identity/authorization, and avoids relying on one warm Vercel instance.
   const previous = context?.history.slice().reverse().filter((line) => line.role === "user")
     .map((line) => interpretQueryLocal(line.text)).find((intent) => intent.intent !== "unknown");
   const s: Session = context ? {
     callerName: context.callerName, history: context.history.map((line) => ({ ...line })),
-    lastIntent: previous?.intent ?? null, lastKeywords: previous?.keywords ?? [], touched: now,
+    lastIntent: previous?.intent ?? null, lastKeywords: previous?.keywords ?? [],
+    draftContext: context.draftContext ?? null, touched: now,
   } : getSession(sessionId);
   const nameGuess = callerNameFrom(message, !!s.callerName);
   if (nameGuess) s.callerName = nameGuess;
+
+  const done = (turn: Omit<CallTurn, "callerName">): CallTurn => {
+    s.history.push({ role: "user", text: message }, { role: "aqua", text: turn.reply });
+    if (s.history.length > 16) s.history.splice(0, s.history.length - 16);
+    return { ...turn, callerName: s.callerName };
+  };
+
+  // ---- write tool: posting to the board for the caller ----
+  const local = interpretQueryLocal(message);
+  if (s.draftContext && CANCEL.test(message)) {
+    s.draftContext = null;
+    return done({ reply: "No worries — scrapped that draft. What else is on your mind?", cards: [], provider: "local", endCall: false, draftContext: null, posted: null, acted: true });
+  }
+  const wantsPost = local.intent === "create_post";
+  const newTopic = QUESTIONY.test(message) || (RETRIEVAL_INTENTS.has(local.intent) && message.split(/\s+/).length > 6);
+  if (wantsPost || (s.draftContext && !newTopic)) {
+    const text = wantsPost ? message : `${s.draftContext}. ${message}`;
+    const res = await postFromText(user, text, now);
+    const kindLabel = res.draft.type === "event" ? "an event" : res.draft.type === "offer" ? "an offer" : res.draft.type === "request" ? "a request" : `a ${res.draft.type}`;
+    if (res.outcome === "missing") {
+      s.draftContext = text.slice(0, 700);
+      const ask = res.missing.includes("location") ? (res.draft.type === "event" ? "where on campus is it happening?" : "where are you on campus?")
+        : res.missing.includes("time") ? "when does it start?"
+        : res.draft.category === "ride" ? "where are you headed?" : "what exactly is the item?";
+      return done({ reply: `On it — posting ${kindLabel}: "${res.draft.title}". Quick thing first: ${ask}`, cards: [], provider: res.draft.provider, endCall: false, draftContext: s.draftContext, posted: null, acted: true });
+    }
+    if (res.outcome === "invalid") {
+      return done({ reply: `I drafted "${res.draft.title}" but a couple of details need a human eye — mind finishing it in the Connect tab?`, cards: [], provider: res.draft.provider, endCall: false, draftContext: s.draftContext, posted: null, acted: true });
+    }
+    s.draftContext = null;
+    const loc = getLocation(res.draft.locationId);
+    const where = loc ? ` at ${loc.name}` : "";
+    const matched = res.matchCount ? ` It already matched ${res.matchCount} other post${res.matchCount > 1 ? "s" : ""}!` : "";
+    const href = `/connect?post=${res.post.id}`;
+    const card: CallCard = { id: res.post.id, title: res.post.title, href, kind: res.post.type, at: res.post.startsAt?.getTime() ?? res.post.createdAt.getTime(), isDemo: false, external: false };
+    return done({ reply: `Done — "${res.post.title}" is live on Connect${where}.${matched} Anything else?`, cards: [card], provider: res.draft.provider, endCall: false, draftContext: null, posted: { id: res.post.id, title: res.post.title, href }, acted: true });
+  }
+  // A clear topic change drops any half-finished draft, same as the chat assistant.
+  if (newTopic) s.draftContext = null;
 
   const { intent, picked } = await pickItems(message, s, now);
   const records: GroundingRecord[] = picked.map(toRecord);
@@ -204,9 +256,7 @@ export async function callTurn(sessionId: string, message: string, now = Date.no
     if (!picked.length) cards = [];
   }
 
-  s.history.push({ role: "user", text: message }, { role: "aqua", text: reply });
-  if (s.history.length > 16) s.history.splice(0, s.history.length - 16);
-  return { reply, cards: cards.map(src), callerName: s.callerName, provider, endCall };
+  return done({ reply, cards: cards.map(src), provider, endCall, draftContext: s.draftContext, posted: null, acted: false });
 }
 
 export function endCall(sessionId: string): { reply: string } {

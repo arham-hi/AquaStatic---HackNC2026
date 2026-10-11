@@ -9,7 +9,7 @@ import { CallTurns, isPlaybackEcho } from "./call-speech";
 export type CallPhase = "off" | "ringing" | "greeting" | "listening" | "thinking" | "speaking" | "goodbye";
 export type CallLine = { role: "user" | "aqua"; text: string };
 export type CallCard = { id: string; title: string; href: string; kind: string; at: number | null; isDemo: boolean; external: boolean };
-type CallResponse = { reply: string; cards: CallCard[]; callerName: string | null; provider: string; endCall: boolean };
+type CallResponse = { reply: string; cards: CallCard[]; callerName: string | null; provider: string; endCall: boolean; draftContext: string | null; posted: { id: string; title: string; href: string } | null; acted: boolean };
 type Rec = {
   lang: string; interimResults: boolean; continuous: boolean; maxAlternatives: number;
   onresult: ((e: { resultIndex: number; results: { isFinal: boolean; 0: { transcript: string } }[] }) => void) | null;
@@ -39,6 +39,7 @@ export function useCall(opts: { suspend: () => void; resume: () => void; emitFx:
   const sessionRef = useRef("");
   const historyRef = useRef<CallLine[]>([]);
   const callerNameRef = useRef<string | null>(null);
+  const draftRef = useRef<string | null>(null);
   const turnsRef = useRef(new CallTurns());
   const recRef = useRef<Rec | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -249,11 +250,12 @@ export function useCall(opts: { suspend: () => void; resume: () => void; emitFx:
     stopListening(); stopPlayback(); setInterim(""); setNotice(null);
     appendLine({ role: "user", text }); setPhaseBoth("thinking");
     try {
-      const r = await api.post<CallResponse>("/api/radio/call", { sessionId: sessionRef.current, action: "say", message: text, history, callerName: callerNameRef.current });
+      const r = await api.post<CallResponse>("/api/radio/call", { sessionId: sessionRef.current, action: "say", message: text, history, callerName: callerNameRef.current, draftContext: draftRef.current });
       if (deadRef.current || !turnsRef.current.current(turn)) return;
       if (r.callerName) { callerNameRef.current = r.callerName; setCallerName(r.callerName); }
+      draftRef.current = r.draftContext ?? null;
       setCards(r.cards);
-      if (r.provider !== "gemini") {
+      if (r.provider !== "gemini" && !r.acted) {
         setNotice("Aqua's AI is unavailable right now. Try again shortly. Any matching campus posts are shown below.");
         if (r.endCall) { void endCall(); return; }
         beginListening(); return;
@@ -275,7 +277,7 @@ export function useCall(opts: { suspend: () => void; resume: () => void; emitFx:
     deadRef.current = false;
     const turn = turnsRef.current.next();
     sessionRef.current = `call_${Array.from(crypto.getRandomValues(new Uint8Array(16)), (byte) => byte.toString(16).padStart(2, "0")).join("")}`;
-    historyRef.current = []; callerNameRef.current = null;
+    historyRef.current = []; callerNameRef.current = null; draftRef.current = null;
     setLines([]); setCards([]); setCallerName(null); setNotice(null); setVoiceUsed(null); setPhaseBoth("ringing");
     optsRef.current.suspend(); optsRef.current.emitFx("bounce");
     try {
