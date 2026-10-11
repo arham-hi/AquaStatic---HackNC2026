@@ -50,8 +50,9 @@ export async function refreshSource(id: string, now = Date.now()): Promise<{ id:
   try {
     const items = await fetchSource(def, now);
     let inserted = 0;
-    // Only spend Gemini calls on brand-new items, and only a few per refresh.
-    let aiBudget = hasGemini() ? 6 : 0;
+    // Gemini classification of feed items is off by default: on the free tier (20 requests/day) it would eat the
+    // whole budget on ingestion. Set SOURCES_USE_GEMINI=true to spend up to 6 calls per refresh on new events.
+    let aiBudget = hasGemini() && process.env.SOURCES_USE_GEMINI === "true" ? 6 : 0;
     for (const it of items) {
       const dedupeKey = `${def.id}:${(it.url || it.providerId).toLowerCase().replace(/[#?].*$/, "")}`;
       const exists = db.select({ id: schema.externalItems.id }).from(schema.externalItems).where(eq(schema.externalItems.dedupeKey, dedupeKey)).get();
