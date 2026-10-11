@@ -6,15 +6,20 @@ import { env, hasElevenLabs } from "@/lib/env";
 
 const audioDir = () => path.resolve(process.cwd(), "data", "audio");
 
-export async function synthesize(text: string, voiceId = env.elevenlabs.voiceId): Promise<Buffer> {
+export async function synthesize(text: string, voiceId = env.elevenlabs.voiceId, model = "eleven_turbo_v2_5"): Promise<Buffer> {
   if (!hasElevenLabs()) throw new Error("ELEVENLABS_API_KEY not configured");
   const res = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}?output_format=mp3_44100_128`, {
     method: "POST",
     headers: { "xi-api-key": env.elevenlabs.apiKey, "content-type": "application/json", accept: "audio/mpeg" },
-    body: JSON.stringify({ text: text.slice(0, 4800), model_id: "eleven_turbo_v2_5", voice_settings: { stability: 0.5, similarity_boost: 0.75 } }),
+    body: JSON.stringify({ text: text.slice(0, 4800), model_id: model, voice_settings: { stability: 0.45, similarity_boost: 0.75, style: 0.35, use_speaker_boost: true } }),
   });
   if (!res.ok) throw new Error(`ElevenLabs ${res.status}: ${(await res.text()).slice(0, 200)}`);
   return Buffer.from(await res.arrayBuffer());
+}
+
+/** Latency-critical synthesis for live calls — Flash is ElevenLabs' fastest English model (~75ms). */
+export async function synthesizeLive(text: string): Promise<Buffer> {
+  return synthesize(text, env.elevenlabs.voiceId, "eleven_flash_v2_5");
 }
 
 export async function synthesizeToFile(id: string, text: string): Promise<string> {

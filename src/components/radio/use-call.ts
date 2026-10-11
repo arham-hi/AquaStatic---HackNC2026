@@ -44,7 +44,16 @@ export function useCall(opts: {
   const [callerName, setCallerName] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [micOn, setMicOn] = useState(true);
+  const [voiceUsed, setVoiceUsed] = useState<"elevenlabs" | "browser" | null>(null);
   const [srAvailable] = useState(() => (typeof window !== "undefined" ? !!srCtor() : false));
+
+  // Call audio owns ONE AudioContext, created lazily on the first MP3 and closed at call end.
+  // The station's context stays suspended for the whole call, so there's never an overlap.
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const freqRef = useRef<Uint8Array<ArrayBuffer> | null>(null);
+  const mp3PlayingRef = useRef(false);
+  const audioElRef = useRef<HTMLAudioElement | null>(null);
 
   const levelsRef = useRef<StationLevels>({ voice: 0, music: 0 });
   const phaseRef = useRef<CallPhase>("off");
@@ -62,8 +71,58 @@ export function useCall(opts: {
 
   const setPhaseBoth = (p: CallPhase) => { phaseRef.current = p; setPhase(p); };
 
+  const callCtx = useCallback(() => {
+    if (!audioCtxRef.current) {
+      const AC = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+      if (!AC) return null;
+      audioCtxRef.current = new AC();
+    }
+    return audioCtxRef.current;
+  }, []);
+
+  /** Try ElevenLabs via the call-audio route (server-side budget guard). Falls back to browser TTS. */
+  const speakMp3 = useCallback(async (text: string): Promise<boolean> => {
+    try {
+      const res = await fetch("/api/radio/call/audio", {
+        method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ sessionId: sessionRef.current, text }),
+      });
+      if (!res.ok || !res.headers.get("content-type")?.includes("audio")) return false;
+      const url = URL.createObjectURL(await res.blob());
+      const ctx = callCtx();
+      if (!ctx) { URL.revokeObjectURL(url); return false; }
+      if (ctx.state === "suspended") await ctx.resume().catch(() => {});
+      const el = new Audio(url);
+      audioElRef.current = el;
+      const src = ctx.createMediaElementSource(el);
+      const an = ctx.createAnalyser();
+      an.fftSize = 512;
+      src.connect(an); an.connect(ctx.destination);
+      try { await el.play(); } catch { try { src.disconnect(); an.disconnect(); } catch { /* noop */ } URL.revokeObjectURL(url); audioElRef.current = null; return false; }
+      analyserRef.current = an;
+      freqRef.current = new Uint8Array(an.frequencyBinCount);
+      mp3PlayingRef.current = true;
+      await new Promise<void>((resolve) => {
+        let settled = false;
+        const done = () => { if (settled) return; settled = true; resolve(); };
+        const wd = setTimeout(done, Math.max(4000, text.length * 120));
+        el.onended = () => { clearTimeout(wd); done(); };
+        el.onerror = () => { clearTimeout(wd); done(); };
+      });
+      mp3PlayingRef.current = false;
+      analyserRef.current = null;
+      try { src.disconnect(); an.disconnect(); } catch { /* noop */ }
+      URL.revokeObjectURL(url);
+      audioElRef.current = null;
+      return true;
+    } catch {
+      mp3PlayingRef.current = false;
+      return false;
+    }
+  }, [callCtx]);
+
   // ---------- Aqua's voice (call TTS drives the same levelsRef the mascot reads) ----------
-  const speak = useCallback((text: string) => new Promise<void>((resolve) => {
+  const speakTts = useCallback((text: string) => new Promise<void>((resolve) => {
     if (!hasTts() || deadRef.current) { speakingRef.current = false; return resolve(); }
     const synth = window.speechSynthesis;
     const parts = sentences(text);
@@ -93,13 +152,25 @@ export function useCall(opts: {
     setTimeout(next, 50);
   }), []);
 
-  // procedural mouth energy while call TTS runs (mirrors the station's TTS pattern)
+  const speak = useCallback(async (text: string) => {
+    if (deadRef.current) return;
+    if (await speakMp3(text)) { setVoiceUsed("elevenlabs"); return; } // ElevenLabs — real voice
+    setVoiceUsed("browser");
+    await speakTts(text);                                            // browser fallback
+  }, [speakMp3, speakTts]);
+
+  // mouth energy: real amplitude from the MP3 analyser, procedural rhythm for browser TTS
   useEffect(() => {
     let raf = 0;
     const tick = () => {
       const l = levelsRef.current;
       let v = 0;
-      if (speakingRef.current) {
+      if (mp3PlayingRef.current && analyserRef.current && freqRef.current) {
+        analyserRef.current.getByteFrequencyData(freqRef.current);
+        let sum = 0;
+        for (let i = 2; i < 46; i++) sum += freqRef.current[i]; // voice band
+        v = Math.min(1, (sum / 44 / 255) * 2.4);
+      } else if (speakingRef.current) {
         const t = performance.now() / 1000;
         const kick = Math.max(0, 1 - (performance.now() - kickRef.current) / 450);
         const syll = Math.max(0, Math.sin(t * 10.7) * 0.6 + Math.sin(t * 17.3) * 0.4);
@@ -266,6 +337,12 @@ export function useCall(opts: {
     deadRef.current = true;
     streamRef.current?.getTracks().forEach((t) => t.stop());
     streamRef.current = null;
+    audioElRef.current?.pause();
+    audioElRef.current = null;
+    mp3PlayingRef.current = false;
+    analyserRef.current = null;
+    void audioCtxRef.current?.close().catch(() => {});
+    audioCtxRef.current = null;
     if (hasTts()) window.speechSynthesis.cancel();
     speakingRef.current = false;
     levelsRef.current.voice = 0;
@@ -290,6 +367,9 @@ export function useCall(opts: {
     deadRef.current = true;
     stopListening();
     streamRef.current?.getTracks().forEach((t) => t.stop());
+    audioElRef.current?.pause();
+    mp3PlayingRef.current = false;
+    void audioCtxRef.current?.close().catch(() => {});
     if (hasTts()) window.speechSynthesis.cancel();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stopListening]);
@@ -311,7 +391,7 @@ export function useCall(opts: {
   }[phase];
 
   return {
-    active, phase, mascot, status, lines, interim, cards, callerName, notice, micOn, srAvailable, levelsRef,
+    active, phase, mascot, status, lines, interim, cards, callerName, notice, micOn, srAvailable, voiceUsed, levelsRef,
     startCall, endCall: endCallInner, toggleMic, submit,
   };
 }

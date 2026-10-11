@@ -8,7 +8,7 @@ vi.mock("@/lib/ai/gemini", async (importOriginal) => {
   return { ...orig, generateJson: vi.fn(orig.generateJson) };
 });
 
-freshDb("call");
+freshDb("call"); 
 
 const { getDb, schema } = await import("@/lib/db/client");
 const { createPost, CreatePostSchema } = await import("@/lib/services/posts");

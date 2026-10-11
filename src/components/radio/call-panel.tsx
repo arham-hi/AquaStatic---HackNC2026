@@ -27,6 +27,7 @@ export function CallPanel({ call }: { call: Call }) {
         <span className="aero-eyebrow !mb-0"><Radio className="size-3" /> Live with Aqua</span>
         <Badge tone="carolina"><Sparkles className="size-3" />AI host</Badge>
         <Badge tone="mint"><ShieldCheck className="size-3" />Private call — not broadcast</Badge>
+        {call.voiceUsed && <Badge tone={call.voiceUsed === "elevenlabs" ? "mint" : "neutral"}><Mic className="size-3" />{call.voiceUsed === "elevenlabs" ? "Studio voice" : "Browser voice"}</Badge>}
         <span className="ml-auto text-xs font-semibold text-fg-muted" role="status">{call.status}</span>
       </div>
       <p className="mt-1 text-[11px] text-fg-faint">
