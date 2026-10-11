@@ -26,6 +26,7 @@ export async function parsePost(raw: string, now = Date.now()): Promise<ParseRes
       `Interpret this student message for the campus board. Decide if it is a request (asking for something), an offer (providing something/help, or reporting a found item), an event, news, an alert, or a notice.
 Categories: borrowing (short loans of items), giveaway (giving something away for keeps: furniture, fridges, move-out stuff; "offer" when giving, "request" when looking for one), tutoring (academic help), study (study partners), lost_found, free_food, ride, event, news, alert, transit, other.
 powerClass only for chargers/cables: laptop (can power a laptop), phone, cable (just a cable).
+destination = for rides only, where the person is going (e.g. "RDU Airport", "Harris Teeter"); null otherwise.
 durationMinutes = how long the post stays relevant if stated (e.g. "for 45 mins", "until 5pm" relative to now). startsInMinutes if the thing starts later.
 List in "missing" what a human must confirm: location (if none is clear), time, item.
 Current campus time: ${new Date(now).toLocaleString("en-US", { timeZone: "America/New_York" })}.

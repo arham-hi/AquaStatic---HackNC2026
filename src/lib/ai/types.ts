@@ -16,6 +16,7 @@ export const ParsedPostSchema = z.object({
   powerClass: z.enum(["laptop", "phone", "cable"]).nullable(),
   lostOrFound: z.enum(["lost", "found"]).nullable(),
   durationMinutes: z.number().int().min(5).max(24 * 60).nullable(),
+  destination: z.string().max(60).nullable(),
   startsInMinutes: z.number().int().min(0).max(14 * 24 * 60).nullable(),
   urgency: z.enum(URGENCIES),
   confidence: z.number().min(0).max(1),

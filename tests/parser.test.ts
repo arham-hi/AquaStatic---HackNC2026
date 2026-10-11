@@ -85,3 +85,14 @@ describe("giveaways", () => {
     expect(parsePostLocal("Looking for a free desk for my dorm, anyone giving one away near Ehringhaus?")).toMatchObject({ type: "request", category: "giveaway", item: "desk" });
   });
 });
+
+describe("rides", () => {
+  it("extracts destination and clock time", () => {
+    const p = parsePostLocal("Anyone going to RDU airport Friday around 3? Happy to split an Uber from Granville.", Date.UTC(2026, 9, 10, 15, 0));
+    expect(p).toMatchObject({ type: "request", category: "ride", destination: "RDU Airport", locationId: "granville-towers" });
+    expect(p.startsInMinutes).toBeGreaterThan(0);
+    expect(parsePostLocal("Driving to Harris Teeter tonight at 7, have room for 2").type).toBe("offer");
+    expect(parsePostLocal("Looking for a ride to Target tomorrow").destination).toBe("Target");
+    expect(parsePostLocal("need a lift to carrboro farmers market saturday").destination).toBe("Carrboro Farmers Market");
+  });
+});

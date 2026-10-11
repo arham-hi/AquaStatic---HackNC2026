@@ -64,6 +64,38 @@ const SUBJECTS: [RegExp, string][] = [
 
 const DURATION_RE = /(\d+)\s*(min|mins|minutes|hr|hrs|hour|hours)\b/;
 const UNTIL_RE = /(?:until|till|til|'til)\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/;
+const AT_RE = /(?:around|at|@|by)\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\b/;
+
+/** Minutes from now until a clock time like "around 6" or "at 3pm" (today, campus time); null if none. */
+function minutesUntilClock(t: string, re: RegExp, now: number): number | null {
+  const u = re.exec(t);
+  if (!u) return null;
+  let h = Number(u[1]);
+  if (h > 23) return null;
+  const min = Number(u[2] ?? 0);
+  const ap = u[3];
+  const nowNy = new Date(new Date(now).toLocaleString("en-US", { timeZone: "America/New_York" }));
+  if (ap === "pm" && h < 12) h += 12;
+  if (ap === "am" && h === 12) h = 0;
+  if (!ap && h < nowNy.getHours() && h <= 11) h += 12; // "around 6" at 2pm means 6pm
+  const target = new Date(nowNy);
+  target.setHours(h, min, 0, 0);
+  const diff = Math.round((target.getTime() - nowNy.getTime()) / 60000);
+  return diff > 0 && diff < 24 * 60 ? diff : null;
+}
+
+const DESTINATIONS: [RegExp, string][] = [
+  [/\brdu\b|\bairport\b/, "RDU Airport"], [/harris teeter|\bht\b/, "Harris Teeter"], [/trader joe'?s/, "Trader Joe's"], [/\btarget\b/, "Target"],
+  [/\bwalmart\b/, "Walmart"], [/\bcostco\b/, "Costco"], [/\bsouthpoint\b/, "Southpoint Mall"], [/\bwhole foods\b/, "Whole Foods"],
+  [/\bfood lion\b/, "Food Lion"], [/\bdurham\b/, "Durham"], [/\braleigh\b/, "Raleigh"], [/\bgreensboro\b/, "Greensboro"], [/\bcharlotte\b/, "Charlotte"],
+  [/\bduke\b/, "Duke"], [/\bnc state\b|\bncsu\b/, "NC State"], [/\bgrocery\b|\bgroceries\b/, "the grocery store"], [/\bamtrak\b|train station/, "Durham Amtrak"],
+];
+
+export function parseDestination(t: string): string | null {
+  for (const [re, name] of DESTINATIONS) if (re.test(t)) return name;
+  const m = /\b(?:ride|lift|carpool|drive|driving|going|heading)\s+(?:to|into)\s+(?:the\s+)?([a-z][a-z0-9' &-]{2,40}?)(?=\s+(?:around|at|on|this|tonight|tomorrow|tmrw|by|for|in|monday|tuesday|wednesday|thursday|friday|saturday|sunday|mon|tue|tues|wed|thu|thurs|fri|sat|sun|,)|[.!?,]|$)/.exec(t);
+  return m ? m[1].trim().replace(/\b\w/g, (c) => c.toUpperCase()) : null;
+}
 
 export function parseDurationMinutes(t: string, now = Date.now()): number | null {
   const m = DURATION_RE.exec(t);
@@ -93,11 +125,13 @@ export function parseDurationMinutes(t: string, now = Date.now()): number | null
   return null;
 }
 
-export function parseStartsInMinutes(t: string): number | null {
+export function parseStartsInMinutes(t: string, now = Date.now()): number | null {
   const m = /\bin\s+(\d+)\s*(min|mins|minutes|hr|hrs|hour|hours)\b/.exec(t);
   if (m) return m[2].startsWith("h") ? Number(m[1]) * 60 : Number(m[1]);
+  const clock = minutesUntilClock(t, AT_RE, now);
+  if (clock != null) return /\btomorrow\b|\btmrw\b/.test(t) ? clock + 24 * 60 : clock;
   if (/\btonight\b/.test(t)) return 60;
-  if (/\btomorrow\b/.test(t)) return 24 * 60;
+  if (/\btomorrow\b|\btmrw\b/.test(t)) return 24 * 60;
   return null;
 }
 
@@ -107,7 +141,7 @@ export function detectCategory(t: string): PostCategory {
   if (has(t, /free (food|pizza|donuts|bagels|coffee|snacks|lunch|dinner|breakfast|boba|cookies)|\bleftover\b|\bfree pizza\b/)) return "free_food";
   // Giveaways: furniture and stuff people would otherwise toss, especially at move-out.
   if (has(t, /\bgiving away\b|\bgive away\b|\bgiveaway\b|\bfree to a good home\b|\bcome get it\b|\bmoving out\b|\bfirst come first serve\b|\btake it off my hands\b|\bfree (couch|sofa|chair|desk|fridge|mini ?fridge|microwave|lamp|mattress|shelf|rug|monitor|tv|fan|printer|futon)\b|\banyone want (a|an|my|this|these)\b/) || (has(t, /\b(couch|sofa|futon|mini ?fridge|microwave|mattress|lamp|rug|shelf|bookshelf|desk chair|office chair)\b/) && !has(t, /\bborrow\b|\blend\b/))) return "giveaway";
-  if (has(t, /\bride\b|\bcarpool\b|\bdrive me\b|\buber split\b|\bgrocery\b/)) return "ride";
+  if (has(t, /\bride\b|\bcarpool\b|\bdrive me\b|\buber\b|\blyft\b|\blift to\b|\bdriving to\b|\bairport\b|\brdu\b|\bgas money\b|\bgrocery\b/)) return "ride";
   if (has(t, /\btutor(ing)?\b|\bhelp (me )?(with|understand)\b|\bexplain\b|\bhomework\b|\bpset\b|\bproblem set\b|\bexam\b|\bmidterm\b|\bfinal\b/) || SUBJECTS.some(([re]) => re.test(t))) {
     if (has(t, /\bstudy (group|buddy|session|partner)\b|\bstudying\b|\bstudy with\b|\bgrind\b/)) return "study";
     return "tutoring";
@@ -126,6 +160,7 @@ export function detectType(t: string, category: PostCategory): ParsedPost["type"
   const requestish = has(t, /\bi need\b|\bneed (a|an|some|help)\b|\blooking for\b|\bdoes anyone\b|\banyone (have|got|has|know|want|wanna|down)\b|\bcan (someone|anyone|anybody)\b|\bcould (someone|anyone)\b|\bhelp me\b|\bwho has\b|\bforgot my\b|\blost my\b|\bany(one|body) selling\b|\bcan i borrow\b|\bwanna\b|\bwant to\b/);
   if (category === "lost_found") return /\bfound\b/.test(t) && !/\blost\b/.test(t) ? "offer" : "request";
   if (category === "free_food") return requestish && !offerish ? "request" : "offer";
+  if (category === "ride") return has(t, /\bi(\'m| am)? driving\b|\bhave (a )?(seat|seats|room|space)\b|\bcan (drive|take|give)\b|\boffering a ride\b|\bgot room\b/) ? "offer" : "request";
   if (category === "giveaway") return has(t, /\blooking for\b|\bdoes anyone have\b|\banyone (have|got|giving)\b|\bi need\b|\bneed (a|an)\b|\bi want(ed)? (a|an)\b/) && !offerish && !has(t, /\banyone want\b|\bwho wants\b/) ? "request" : "offer";
   if (category === "alert") return "alert";
   if (category === "event") return has(t, /\banyone (want|wanna|down)\b|\blooking for\b/) ? "request" : "event";
@@ -144,7 +179,7 @@ export function detectUrgency(t: string, category: PostCategory): ParsedPost["ur
   return "low";
 }
 
-function titleFor(type: ParsedPost["type"], category: PostCategory, item: string | null, subject: string | null, locName: string | null, raw: string): string {
+function titleFor(type: ParsedPost["type"], category: PostCategory, item: string | null, subject: string | null, locName: string | null, raw: string, dest: string | null = null): string {
   const where = locName ? ` at ${locName}` : "";
   if (category === "lost_found") return `${type === "offer" ? "Found" : "Lost"}: ${item ?? "item"}${where}`;
   if (category === "borrowing") return type === "offer" ? `Spare ${item ?? "item"} available${where}` : `Need a ${item ?? "item"}${where}`;
@@ -152,7 +187,7 @@ function titleFor(type: ParsedPost["type"], category: PostCategory, item: string
   if (category === "tutoring") return type === "offer" ? `Can help with ${subject ?? "coursework"}${where}` : `Help wanted: ${subject ?? "coursework"}${where}`;
   if (category === "study") return type === "offer" ? `Studying ${subject ?? ""}${where}`.replace(/\s+/g, " ").trim() : `Study buddy for ${subject ?? "class"}${where}`;
   if (category === "free_food") return `Free ${item ?? "food"}${where}`;
-  if (category === "ride") return type === "offer" ? "Offering a ride" : "Looking for a ride";
+  if (category === "ride") return type === "offer" ? `Offering a ride${dest ? ` to ${dest}` : ""}` : `Looking for a ride${dest ? ` to ${dest}` : ""}`;
   if (category === "alert") return `Heads up${where}`;
   if (category === "transit") return `Transit notice${where}`;
   if (category === "event") return raw.length > 60 ? raw.slice(0, 57).trim() + "…" : raw;
@@ -167,19 +202,21 @@ export function parsePostLocal(raw: string, now = Date.now()): ParsedPost {
   const itemHit = ITEM_PATTERNS.find((p) => p.re.test(t));
   const subject = SUBJECTS.find(([re]) => re.test(t))?.[1] ?? null;
   const durationMinutes = parseDurationMinutes(t, now);
-  const startsInMinutes = parseStartsInMinutes(t);
+  const startsInMinutes = parseStartsInMinutes(t, now);
+  const destination = category === "ride" ? parseDestination(t) : null;
   const urgency = detectUrgency(t, category);
   const needsLocation = ["borrowing", "giveaway", "tutoring", "study", "lost_found", "free_food", "alert", "event"].includes(category);
   const missing: ParsedPost["missing"] = [];
   if (needsLocation && !loc) missing.push("location");
+  if (category === "ride" && !destination) missing.push("item");
   if ((category === "borrowing" || category === "giveaway") && !itemHit) missing.push("item");
   const noteMatch = /\b(\d+)(st|nd|rd|th) floor\b|\bbasement\b|\bentrance\b|\bfront desk\b|\blobby\b/.exec(t);
-  const extra = [itemHit?.item, subject, category.replace("_", " ")].filter(Boolean) as string[];
+  const extra = [itemHit?.item, subject, destination, category.replace("_", " ")].filter(Boolean) as string[];
   const confidence = Math.min(1, 0.45 + (loc ? 0.2 : 0) + (itemHit || subject ? 0.2 : 0) + (durationMinutes ? 0.1 : 0));
   return {
     type,
     category,
-    title: titleFor(type, category, itemHit?.item ?? null, subject, loc?.name ?? null, raw.trim()),
+    title: titleFor(type, category, itemHit?.item ?? null, subject, loc?.name ?? null, raw.trim(), destination),
     summary: raw.trim().length > 180 ? raw.trim().slice(0, 177) + "…" : raw.trim(),
     keywords: keywordsOf(raw, extra),
     locationId: loc?.id ?? null,
@@ -189,6 +226,7 @@ export function parsePostLocal(raw: string, now = Date.now()): ParsedPost {
     powerClass: itemHit?.powerClass ?? null,
     lostOrFound: category === "lost_found" ? (type === "offer" ? "found" : "lost") : null,
     durationMinutes,
+    destination,
     startsInMinutes,
     urgency,
     confidence,

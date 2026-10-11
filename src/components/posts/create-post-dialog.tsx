@@ -28,14 +28,14 @@ type Draft = {
   type: "request" | "offer" | "event" | "alert" | "notice" | "news";
   category: PostCategory; title: string; summary: string; locationId: string | null; locationNote: string;
   urgency: "low" | "soon" | "urgent"; expiry: "30m" | "1h" | "3h" | "today" | "custom"; customExpiry: string;
-  keywords: string[]; item: string; subject: string; powerClass: "laptop" | "phone" | "cable" | null; lostOrFound: "lost" | "found" | null; durationMinutes: number | null;
+  keywords: string[]; item: string; subject: string; powerClass: "laptop" | "phone" | "cable" | null; lostOrFound: "lost" | "found" | null; durationMinutes: number | null; destination: string;
 };
 
 function toDraft(p: ParseResult): Draft {
   const expiry: Draft["expiry"] = p.durationMinutes == null ? (p.category === "lost_found" ? "today" : "1h") : p.durationMinutes <= 30 ? "30m" : p.durationMinutes <= 75 ? "1h" : p.durationMinutes <= 200 ? "3h" : "today";
-  return { type: p.type, category: p.category, title: p.title, summary: p.summary, locationId: p.locationId, locationNote: p.locationNote ?? "", urgency: p.urgency, expiry, customExpiry: "", keywords: p.keywords, item: p.item ?? "", subject: p.subject ?? "", powerClass: p.powerClass, lostOrFound: p.lostOrFound, durationMinutes: p.durationMinutes };
+  return { type: p.type, category: p.category, title: p.title, summary: p.summary, locationId: p.locationId, locationNote: p.locationNote ?? "", urgency: p.urgency, expiry, customExpiry: "", keywords: p.keywords, item: p.item ?? "", subject: p.subject ?? "", powerClass: p.powerClass, lostOrFound: p.lostOrFound, durationMinutes: p.durationMinutes, destination: p.destination ?? "" };
 }
-const blankDraft = (): Draft => ({ type: "request", category: "borrowing", title: "", summary: "", locationId: null, locationNote: "", urgency: "low", expiry: "1h", customExpiry: "", keywords: [], item: "", subject: "", powerClass: null, lostOrFound: null, durationMinutes: null });
+const blankDraft = (): Draft => ({ type: "request", category: "borrowing", title: "", summary: "", locationId: null, locationNote: "", urgency: "low", expiry: "1h", customExpiry: "", keywords: [], item: "", subject: "", powerClass: null, lostOrFound: null, durationMinutes: null, destination: "" });
 
 export function CreatePostDialog() {
   const { createState, setCreateOpen, focusMap } = useUI();
@@ -67,7 +67,8 @@ export function CreatePostDialog() {
   };
 
   const needsLocation = useMemo(() => !!draft && ["borrowing", "tutoring", "study", "lost_found", "free_food"].includes(draft.category) && !draft.locationId, [draft]);
-  const canPublish = !!draft && draft.title.trim().length >= 3 && !needsLocation && (draft.expiry !== "custom" || !!draft.customExpiry) && (mode === "nl" ? text.trim().length >= 3 : draft.summary.trim().length >= 3);
+  const needsDestination = !!draft && draft.category === "ride" && !draft.destination.trim();
+  const canPublish = !!draft && draft.title.trim().length >= 3 && !needsLocation && !needsDestination && (draft.expiry !== "custom" || !!draft.customExpiry) && (mode === "nl" ? text.trim().length >= 3 : draft.summary.trim().length >= 3);
 
   const publish = async () => {
     if (!draft || !canPublish) return;
@@ -78,7 +79,7 @@ export function CreatePostDialog() {
         description: mode === "nl" ? text.trim() : draft.summary.trim(), type: draft.type, category: draft.category, title: draft.title.trim(), summary: draft.summary.trim() || undefined,
         locationId: draft.locationId, locationNote: draft.locationNote.trim() || null, urgency: draft.urgency, expiry: draft.expiry,
         expiresAt: draft.expiry === "custom" ? new Date(draft.customExpiry).getTime() : undefined, keywords: draft.keywords.slice(0, 12),
-        attributes: { item: draft.item || null, subject: draft.subject || null, powerClass: draft.powerClass, durationMinutes: draft.durationMinutes, lostOrFound: draft.lostOrFound },
+        attributes: { item: draft.item || null, subject: draft.subject || null, powerClass: draft.powerClass, durationMinutes: draft.durationMinutes, destination: draft.destination || null, lostOrFound: draft.lostOrFound },
         isDemo: !!user?.isDemo,
       };
       const r = await api.post<{ post: Post; matches: Match[] }>("/api/posts", body);
@@ -152,6 +153,12 @@ export function CreatePostDialog() {
                 <div className="col-span-2 sm:col-span-1 space-y-1.5">
                   <Label htmlFor="item">Item</Label>
                   <Input id="item" value={D.item} onChange={(e) => set("item", e.target.value)} placeholder="USB-C laptop charger" maxLength={60} />
+                </div>
+              )}
+              {D.category === "ride" && (
+                <div className="col-span-2 sm:col-span-1 space-y-1.5">
+                  <Label htmlFor="dest">Going to</Label>
+                  <Input id="dest" value={D.destination} onChange={(e) => set("destination", e.target.value)} placeholder="RDU Airport, Harris Teeter…" maxLength={60} />
                 </div>
               )}
               {(D.category === "tutoring" || D.category === "study") && (

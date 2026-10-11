@@ -5,14 +5,14 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { X, MapPin, Clock, ExternalLink, Bookmark, BookmarkCheck, Share2, Flag, Pencil, Trash2, CheckCircle2, Sparkles, HeartHandshake, Hourglass, Bus, HandHelping } from "lucide-react";
+import { X, MapPin, Clock, ExternalLink, Bookmark, BookmarkCheck, Share2, Flag, Pencil, Trash2, CheckCircle2, Sparkles, HeartHandshake, Hourglass, Bus, HandHelping, Car, Users } from "lucide-react";
 import { useLive } from "@/hooks/useLive";
 import { api } from "@/lib/client";
 import { useSession, useUI } from "@/components/shell/providers";
 import { Button } from "@/components/ui/button";
 import { Badge, Skeleton, Dialog, DialogContent, Textarea, Input, Chip } from "@/components/ui/primitives";
 import { categoryMeta } from "@/lib/categories";
-import { fmtDateTime, timeAgo, timeUntil } from "@/lib/time";
+import { fmtDateTime, fmtTime, timeAgo, timeUntil } from "@/lib/time";
 import { TrustBadge, TypeBadge, GreenBadge, shareItem, useSaveToggle } from "@/components/feed/feed-card";
 import { LocationPicker } from "./location-picker";
 import type { FeedItem } from "@/lib/services/feed";
@@ -32,6 +32,8 @@ export function PostDetail({ item, onClose, className }: { item: FeedItem; onClo
   const [editing, setEditing] = useState(false);
   const [reporting, setReporting] = useState(false);
   const [claiming, setClaiming] = useState(false);
+  type Companion = { id: string; title: string; type: string; startsAt: string | null; author: { displayName: string; avatar: string } | null };
+  const companions = useLive<{ companions: Companion[]; destination: string | null }>(isPost && item.category === "ride" ? `/api/posts/${item.refId}/companions` : null, { interval: 8000, scopes: ["posts"] });
   const { ensureUser } = useSession();
   const claim = async () => {
     setClaiming(true);
@@ -74,6 +76,7 @@ export function PostDetail({ item, onClose, className }: { item: FeedItem; onClo
       <dl className="mt-3 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-sm">
         <dt className="text-fg-faint flex items-center gap-1"><Clock className="size-3.5" />When</dt>
         <dd>{live.startsAt && live.startsAt > Date.now() ? fmtDateTime(live.startsAt) : `${timeAgo(live.at)} · ${fmtDateTime(live.at)}`}{live.endsAt ? ` → ${fmtDateTime(live.endsAt)}` : ""}</dd>
+        {post?.attributes.destination && (<><dt className="text-fg-faint flex items-center gap-1"><Car className="size-3.5" />Going to</dt><dd>{post.attributes.destination}</dd></>)}
         {(live.locationName || post?.locationNote) && (<><dt className="text-fg-faint flex items-center gap-1"><MapPin className="size-3.5" />Where</dt><dd>{live.locationName}{post?.locationNote ? ` · ${post.locationNote}` : ""}</dd></>)}
         {live.expiresAt && isPost && (<><dt className="text-fg-faint flex items-center gap-1"><Hourglass className="size-3.5" />Expires</dt><dd>{timeUntil(live.expiresAt)} · {fmtDateTime(live.expiresAt)}</dd></>)}
         {nearest.data?.stop && !nearest.data.demo && (<><dt className="text-fg-faint flex items-center gap-1"><Bus className="size-3.5" />Bus</dt><dd className="truncate">{nearest.data.stop.name} · {nearest.data.stop.meters} m{nearest.data.stop.routes.length ? ` · ${nearest.data.stop.routes.join(", ")}` : ""} · <Link href="/transit" className="text-carolina hover:underline">routes</Link></dd></>)}
@@ -94,6 +97,18 @@ export function PostDetail({ item, onClose, className }: { item: FeedItem; onClo
         </div>
       )}
 
+      {isPost && live.category === "ride" && companions.data && companions.data.companions.length > 0 && (
+        <div className="mt-3 rounded-xl border border-mint/40 bg-mint-soft/40 p-3">
+          <div className="flex items-center gap-1.5 text-xs font-semibold text-mint mb-1.5"><Users className="size-3.5" /> {companions.data.companions.length} other{companions.data.companions.length > 1 ? "s" : ""} heading to {companions.data.destination} around then</div>
+          <ul className="space-y-1 text-sm">
+            {companions.data.companions.map((c) => (
+              <li key={c.id} className="flex items-center gap-2"><span className="text-base leading-none">{c.author?.avatar ?? "🐏"}</span><Link href={`/connect?post=${c.id}`} className="hover:underline truncate">{c.author?.displayName?.replace(/ \(demo\)$/, "") ?? "A student"}: {c.title}</Link>{c.startsAt && <span className="text-xs text-fg-faint ml-auto">{fmtTime(c.startsAt)}</span>}</li>
+            ))}
+          </ul>
+          <p className="text-[11px] text-fg-muted mt-1.5">One car instead of three. Open a post and offer to drive, or ask to join.</p>
+        </div>
+      )}
+
       <div className="mt-4 flex flex-wrap gap-2">
         {live.lat != null && <Button size="sm" variant="secondary" onClick={() => { focusMap({ lat: live.lat!, lng: live.lng!, label: live.locationName ?? live.title, itemId: live.id }); router.push("/"); }}><MapPin /> Map</Button>}
         <Button size="sm" variant="secondary" onClick={() => void toggleSave(live, setSaved)}>{saved ? <BookmarkCheck className="text-carolina" /> : <Bookmark />}{saved ? "Saved" : "Save"}</Button>
@@ -106,6 +121,9 @@ export function PostDetail({ item, onClose, className }: { item: FeedItem; onClo
           <Button size="sm" variant="mint" onClick={() => openCreate(live.type === "request" ? `I can help with: ${live.title}${live.locationName ? ` at ${live.locationName}` : ""}` : `I need: ${live.title}${live.locationName ? ` at ${live.locationName}` : ""}`)}><HeartHandshake /> {live.type === "request" ? "I can help" : "I need this"}</Button>
         )}
         {isPost && post && post.status === "matched" && live.category === "giveaway" && <Badge tone="mint">Claimed</Badge>}
+        {isPost && live.category === "ride" && live.type === "request" && !isMine && post?.status === "open" && post.attributes.destination && (
+          <Button size="sm" variant="secondary" onClick={() => openCreate(`I can drive to ${post.attributes.destination}${post.startsAt ? ` around ${fmtTime(post.startsAt)}` : ""}, have room for a couple of people`)}><Car /> I can drive</Button>
+        )}
         {isPost && <Link href={`/connect?post=${live.refId}`} className="text-xs text-carolina self-center hover:underline ml-auto">Open in Connect</Link>}
       </div>
 

@@ -30,6 +30,7 @@ export const CreatePostSchema = z.object({
     subject: z.string().max(60).nullable().optional(),
     powerClass: z.enum(["laptop", "phone", "cable"]).nullable().optional(),
     durationMinutes: z.number().int().nullable().optional(),
+    destination: z.string().max(60).nullable().optional(),
     lostOrFound: z.enum(["lost", "found"]).nullable().optional(),
   }).default({}),
   isDemo: z.boolean().optional(),
@@ -74,7 +75,7 @@ export async function createPost(author: User | null, input: CreatePostInput, no
     keywords: input.keywords,
     attributes: {
       item: input.attributes.item ?? null, subject: input.attributes.subject ?? null, powerClass: input.attributes.powerClass ?? null,
-      durationMinutes: input.attributes.durationMinutes ?? null, lostOrFound: input.attributes.lostOrFound ?? null,
+      durationMinutes: input.attributes.durationMinutes ?? null, destination: input.attributes.destination ?? null, lostOrFound: input.attributes.lostOrFound ?? null,
     },
     isDemo: !!input.isDemo || !!author?.isDemo,
     createdAt: new Date(now),

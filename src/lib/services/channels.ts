@@ -70,7 +70,7 @@ export async function handleChannelMessage(handle: string, text: string): Promis
     const { post, matches } = await createPost(user, {
       description: pend.text, type: d.type, category: d.category, title: d.title, summary: d.summary, locationId: d.locationId, locationNote: d.locationNote,
       urgency: d.urgency, expiry: d.durationMinutes && d.durationMinutes <= 30 ? "30m" : d.durationMinutes && d.durationMinutes > 90 ? "3h" : "1h", keywords: d.keywords,
-      attributes: { item: d.item, subject: d.subject, powerClass: d.powerClass, durationMinutes: d.durationMinutes, lostOrFound: d.lostOrFound },
+      attributes: { item: d.item, subject: d.subject, powerClass: d.powerClass, durationMinutes: d.durationMinutes, destination: d.destination, lostOrFound: d.lostOrFound },
     });
     return { text: `Posted: "${post.title}". ${matches.length ? `I already found ${matches.length} possible match${matches.length > 1 ? "es" : ""} — ` : ""}See it at ${base}/connect?post=${post.id}` };
   }

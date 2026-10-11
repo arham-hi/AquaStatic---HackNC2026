@@ -43,6 +43,7 @@ export type PostAttributes = {
   subject?: string | null; // "calculus"
   powerClass?: "laptop" | "phone" | "cable" | null;
   durationMinutes?: number | null;
+  destination?: string | null; // rides: where to
   lostOrFound?: "lost" | "found" | null;
 };
 

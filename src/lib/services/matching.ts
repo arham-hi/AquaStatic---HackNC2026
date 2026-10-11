@@ -42,7 +42,7 @@ export function scoreMatch(request: Post, offer: Post, now = Date.now()): ScoreR
   // ---- category / item (40%) ----
   let itemScore = 0.6; // same category baseline
   let itemDetail = `Both are ${request.category.replace("_", " & ")}`;
-  const ri = ra.item ?? ra.subject, oi = oa.item ?? oa.subject;
+  const ri = ra.item ?? ra.subject ?? ra.destination, oi = oa.item ?? oa.subject ?? oa.destination;
   if (ri && oi) {
     const sim = jaccard(tokens(ri), tokens(oi));
     const exact = ri.toLowerCase() === oi.toLowerCase();
