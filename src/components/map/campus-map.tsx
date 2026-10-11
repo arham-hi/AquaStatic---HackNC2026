@@ -29,7 +29,10 @@ export type MapHandle = {
   getMap: () => maplibregl.Map | null;
 };
 
-export type ConnectionLine = { id: string; from: [number, number]; to: [number, number] };
+export type ConnectionLine = { id: string; from: [number, number]; to: [number, number]; focused?: boolean };
+
+/** The two ends of a selected match, drawn as labeled glowing endpoints. Same coords = one shared pin. */
+export type MatchEndpoints = { id: string; from: [number, number]; to: [number, number]; fromName: string; toName: string };
 
 type Props = {
   theme: "light" | "dark";
@@ -42,6 +45,7 @@ type Props = {
   onStopSelect?: (stop: TransitStop) => void;
   focusedStop?: TransitStop | null;
   connections: ConnectionLine[];
+  matchFocus?: MatchEndpoints | null;
   onReady?: (h: MapHandle) => void;
   userLocation?: { lat: number; lng: number } | null;
   className?: string;
@@ -106,8 +110,8 @@ function ensureOverlaySources(map: maplibregl.Map) {
   }
   if (!map.getSource("connections")) {
     map.addSource("connections", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
-    map.addLayer({ id: "connections-glow", type: "line", source: "connections", layout: { "line-cap": "round" }, paint: { "line-color": "#2fbf8f", "line-width": 10, "line-opacity": 0.25, "line-blur": 6 } });
-    map.addLayer({ id: "connections-line", type: "line", source: "connections", layout: { "line-cap": "round" }, paint: { "line-color": "#2fbf8f", "line-width": 3, "line-dasharray": [1.5, 1.5] } });
+    map.addLayer({ id: "connections-glow", type: "line", source: "connections", layout: { "line-cap": "round" }, paint: { "line-color": ["case", ["boolean", ["get", "focused"], false], "#67e8f9", "#2fbf8f"], "line-width": ["case", ["boolean", ["get", "focused"], false], 14, 10], "line-opacity": ["case", ["boolean", ["get", "focused"], false], 0.35, 0.25], "line-blur": 6 } });
+    map.addLayer({ id: "connections-line", type: "line", source: "connections", layout: { "line-cap": "round" }, paint: { "line-color": ["case", ["boolean", ["get", "focused"], false], "#22d3ee", "#2fbf8f"], "line-width": ["case", ["boolean", ["get", "focused"], false], 4, 3], "line-dasharray": [1.5, 1.5] } });
   }
   if (!map.getSource("me")) {
     map.addSource("me", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
@@ -130,7 +134,7 @@ function arc(from: [number, number], to: [number, number], n = 32): [number, num
   return pts;
 }
 
-export function CampusMap({ theme, markers, selectedId, onSelect, show3d, transit, onRouteSelect, onStopSelect, focusedStop, connections, onReady, userLocation, className }: Props) {
+export function CampusMap({ theme, markers, selectedId, onSelect, show3d, transit, onRouteSelect, onStopSelect, focusedStop, connections, matchFocus, onReady, userLocation, className }: Props) {
   const el = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const markerRefs = useRef(new Map<string, { marker: maplibregl.Marker; root: Root; el: HTMLDivElement }>());
@@ -415,7 +419,7 @@ export function CampusMap({ theme, markers, selectedId, onSelect, show3d, transi
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !map.isStyleLoaded() || !map.getSource("connections")) return;
-    (map.getSource("connections") as maplibregl.GeoJSONSource).setData({ type: "FeatureCollection", features: connections.map((c) => ({ type: "Feature", geometry: { type: "LineString", coordinates: arc(c.from, c.to) }, properties: { id: c.id } })) });
+    (map.getSource("connections") as maplibregl.GeoJSONSource).setData({ type: "FeatureCollection", features: connections.map((c) => ({ type: "Feature", geometry: { type: "LineString", coordinates: arc(c.from, c.to) }, properties: { id: c.id, focused: !!c.focused } })) });
     if (!connections.length) return;
     let frame = 0;
     let raf = 0;
@@ -427,6 +431,37 @@ export function CampusMap({ theme, markers, selectedId, onSelect, show3d, transi
     if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches) raf = requestAnimationFrame(step);
     return () => cancelAnimationFrame(raf);
   }, [connections, styleReady]);
+
+  // ---- match endpoints (labeled glowing pins for the selected match) ----
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !matchFocus) return;
+    const same = matchFocus.from[0] === matchFocus.to[0] && matchFocus.from[1] === matchFocus.to[1];
+    const specs = same
+      ? [{ at: matchFocus.from, kind: "both", name: matchFocus.fromName }]
+      : [
+          { at: matchFocus.from, kind: "request", name: matchFocus.fromName },
+          { at: matchFocus.to, kind: "offer", name: matchFocus.toName },
+        ];
+    const made: maplibregl.Marker[] = [];
+    for (const s of specs) {
+      const el = document.createElement("div");
+      el.className = "match-end";
+      el.dataset.kind = s.kind;
+      el.title = s.name;
+      const dot = document.createElement("span");
+      dot.className = "match-end-dot";
+      dot.setAttribute("aria-hidden", "true");
+      const tag = document.createElement("span");
+      tag.className = "match-end-label";
+      const b = document.createElement("b");
+      b.textContent = s.kind === "request" ? "Request" : s.kind === "offer" ? "Offer" : "Match";
+      tag.append(b, document.createTextNode(` · ${s.name}`));
+      el.append(dot, tag);
+      made.push(new maplibregl.Marker({ element: el, anchor: "center" }).setLngLat(s.at).addTo(map));
+    }
+    return () => { for (const m of made) m.remove(); };
+  }, [matchFocus, styleReady]);
 
   // ---- user location ----
   useEffect(() => {

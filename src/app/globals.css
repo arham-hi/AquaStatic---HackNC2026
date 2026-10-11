@@ -225,6 +225,21 @@ body {
 .marker svg { width: 16px; height: 16px; position: relative; }
 .marker .shine { position: absolute; inset: 0; border-radius: 50%; background: radial-gradient(circle at 32% 26%, rgba(255,255,255,0.75) 0%, rgba(255,255,255,0.25) 22%, rgba(255,255,255,0) 50%); pointer-events: none; }
 .marker-glow { animation: pulse-ring 1.2s ease-out 3; }
+/* Focused-match endpoints: labeled glowing pins (the dot anchors to the coordinate, label floats right). */
+.match-end { width: 18px; height: 18px; position: relative; z-index: 6; --end: #2fbf8f; }
+.match-end[data-kind="request"] { --end: #0e9fde; }
+.match-end[data-kind="offer"] { --end: #2fbf8f; }
+.match-end[data-kind="both"] { --end: #22b8cf; }
+.match-end-dot { position: absolute; inset: 0; border-radius: 50%; background: var(--end); border: 3px solid rgba(255,255,255,.92); box-shadow: 0 4px 14px -4px rgba(0,0,0,.55), 0 0 12px 0 var(--end); }
+.match-end[data-kind="both"] .match-end-dot { background: linear-gradient(135deg, #0e9fde 0%, #2fbf8f 100%); }
+.match-end::before { content: ""; position: absolute; inset: -7px; border-radius: 50%; border: 2px solid var(--end); animation: pulse-ring 1.8s ease-out infinite; }
+.match-end-label {
+  position: absolute; left: 26px; top: 50%; transform: translateY(-50%); white-space: nowrap;
+  font-size: 10.5px; font-weight: 600; letter-spacing: .02em; padding: 3px 9px; border-radius: 999px;
+  background: var(--surface-strong); border: 1px solid var(--border); box-shadow: var(--shadow-sm);
+  color: var(--fg); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+}
+.match-end-label b { color: var(--end); font-weight: 800; text-transform: uppercase; font-size: 9px; letter-spacing: .06em; }
 .marker-cluster {
   min-width: 34px; height: 34px; padding: 0 8px; border-radius: 999px; display: grid; place-items: center; cursor: pointer;
   background: rgba(255,255,255,0.82); backdrop-filter: blur(8px) saturate(1.3);

@@ -181,7 +181,8 @@ export async function sweepExpirations(now = Date.now()) {
   return res.count;
 }
 
-export const REUSE_CATEGORIES = ["borrowing", "giveaway", "lost_found", "ride", "free_food"] as const;
+export { REUSE_CATEGORIES } from "@/lib/categories";
+import { REUSE_CATEGORIES } from "@/lib/categories";
 
 /** Completed connections that kept an existing item in use (borrowed, returned, shared, eaten instead of binned). A count, never a savings claim. */
 export type SharedBreakdown = { total: number; borrowed: number; rehomed: number; returned: number; rides: number; food: number };

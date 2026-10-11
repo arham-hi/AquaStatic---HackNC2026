@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Map as MapIcon, Radio, HeartHandshake, Plus } from "lucide-react";
+import { Map as MapIcon, Radio, HeartHandshake, Plus, Leaf } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useUI } from "./providers";
 import { Tip } from "@/components/ui/primitives";
@@ -11,6 +11,7 @@ export const NAV = [
   { href: "/", label: "Live Map", icon: MapIcon },
   { href: "/radio", label: "Radio", icon: Radio },
   { href: "/connect", label: "Connect", icon: HeartHandshake },
+  { href: "/impact", label: "Impact", icon: Leaf },
 ] as const;
 
 const isActive = (path: string, href: string) => (href === "/" ? path === "/" : path.startsWith(href));

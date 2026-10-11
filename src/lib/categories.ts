@@ -37,3 +37,6 @@ export const TRUST_META = {
 } as const;
 
 export const categoryMeta = (c: string) => CATEGORIES[c as PostCategory] ?? CATEGORIES.other;
+
+/** Categories where a completed exchange kept something useful in circulation or shared a real resource. */
+export const REUSE_CATEGORIES = ["borrowing", "giveaway", "lost_found", "ride", "free_food"] as const;

@@ -3,9 +3,12 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
-import { Bus, RotateCcw, HeartHandshake } from "lucide-react";
+import { Bus, RotateCcw, HeartHandshake, MapPin, X, ExternalLink } from "lucide-react";
+import maplibregl from "@/lib/maplibre";
+import { api } from "@/lib/client";
 import { useLive } from "@/hooks/useLive";
 import { useSession, useUI } from "@/components/shell/providers";
 import { TopBar } from "@/components/shell/topbar";
@@ -16,9 +19,11 @@ import { greeting } from "@/lib/time";
 import { CAMPUS_CENTER, getLocation } from "@/lib/locations";
 import type { TransitStop } from "@/lib/services/transit";
 import { MapBusPanel, type MapTransitData } from "@/components/transit/map-bus-panel";
-import { cn, plural } from "@/lib/utils";
+import { cn, matchStrength, plural } from "@/lib/utils";
+import { Badge } from "@/components/ui/primitives";
 import type { FeedItem } from "@/lib/services/feed";
-import type { MapHandle, ConnectionLine } from "./campus-map";
+import type { MatchView } from "@/lib/services/connections";
+import type { MapHandle, ConnectionLine, MatchEndpoints } from "./campus-map";
 
 const CampusMap = dynamic(() => import("./campus-map").then((m) => m.CampusMap), { ssr: false, loading: () => <div className="absolute inset-0 grid place-items-center bg-bg"><div className="text-sm text-fg-muted animate-pulse">Loading Chapel Hill…</div></div> });
 
@@ -34,6 +39,7 @@ export function HomeMap() {
   const recent = useLive<{ matches: RecentMatch[] }>("/api/matches?scope=recent", { interval: 4000, scopes: ["matches"] });
   const [handle, setHandle] = useState<MapHandle | null>(null);
   const [selected, setSelected] = useState<FeedItem | null>(null);
+  const [focusMatch, setFocusMatch] = useState<MatchView | null>(null);
   const knownMatches = useRef<Set<string> | null>(null);
   const [flash, setFlash] = useState<ConnectionLine[]>([]);
   const [showBuses, setShowBuses] = useState(() => params.get("buses") === "1");
@@ -78,14 +84,60 @@ export function HomeMap() {
     if (it && it.lat != null) { setSelected(it); handle.flyTo(it.lng!, it.lat, 17.2); }
   }, [params, data.data, handle]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ?match=<id> deep link: load the real match record and visualize its two endpoints.
+  const focusId = params.get("match");
+  useEffect(() => {
+    if (!focusId) { setFocusMatch(null); return; }
+    let stale = false;
+    api.get<{ match: MatchView }>(`/api/matches/${focusId}`)
+      .then((r) => { if (!stale) { setFocusMatch(r.match); setSelected(null); } })
+      .catch((e: Error) => { if (!stale) { toast.error(e.message || "Couldn't load that match"); router.replace("/"); } });
+    return () => { stale = true; };
+  }, [focusId, router]);
+
+  // Real registered coordinates only — a match with a missing location gets a panel note, never a fake pin.
+  const focused = useMemo(() => {
+    if (!focusMatch) return null;
+    const a = getLocation(focusMatch.request.locationId);
+    const b = getLocation(focusMatch.offer.locationId);
+    if (!a || !b) return { endpoints: null as MatchEndpoints | null, line: null as ConnectionLine | null };
+    const same = a.id === b.id;
+    return {
+      endpoints: { id: focusMatch.id, from: [a.lng, a.lat] as [number, number], to: [b.lng, b.lat] as [number, number], fromName: a.name, toName: b.name },
+      line: same ? null : { id: `focus:${focusMatch.id}`, from: [a.lng, a.lat] as [number, number], to: [b.lng, b.lat] as [number, number], focused: true },
+    };
+  }, [focusMatch]);
+
+  // Frame both endpoints once we know them; same-spot matches just zoom in.
+  useEffect(() => {
+    const map = handle?.getMap();
+    const f = focused?.endpoints;
+    if (!map || !f) return;
+    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const duration = reduced ? 0 : 1200;
+    const mobile = window.innerWidth < 768;
+    if (f.from[0] === f.to[0] && f.from[1] === f.to[1]) {
+      map.flyTo({ center: f.from, zoom: 17, pitch: Math.max(map.getPitch(), 50), duration, essential: true });
+    } else {
+      map.fitBounds(new maplibregl.LngLatBounds(f.from, f.to), {
+        padding: { top: 170, bottom: mobile ? Math.min(window.innerHeight * 0.55, 400) : 140, left: 60, right: mobile ? 60 : 420 },
+        maxZoom: 16.6, duration,
+      });
+    }
+  }, [focused, handle]);
+
+  const closeFocus = () => { setFocusMatch(null); if (params.get("match")) router.replace("/"); };
+
   // New match → arc on the map + one toast.
   const connections = useMemo<ConnectionLine[]>(() => {
     const fresh = (recent.data?.matches ?? []).filter((m) => Date.now() - new Date(m.createdAt).getTime() < 3 * 60_000);
-    return fresh.flatMap((m) => {
+    const lines = fresh.flatMap((m) => {
       const a = getLocation(m.request.locationId), b = getLocation(m.offer.locationId);
       return a && b ? [{ id: m.id, from: [a.lng, a.lat] as [number, number], to: [b.lng, b.lat] as [number, number] }] : [];
     }).concat(flash);
-  }, [recent.data, flash]);
+    const ambient = focusMatch ? lines.filter((l) => l.id !== focusMatch.id) : lines;
+    return focused?.line ? [...ambient, focused.line] : ambient;
+  }, [recent.data, flash, focused, focusMatch]);
 
   useEffect(() => {
     if (!recent.data) return;
@@ -111,7 +163,7 @@ export function HomeMap() {
 
   return (
     <div className="map-shell relative h-dvh w-full overflow-hidden">
-      <CampusMap theme={theme} markers={markers} selectedId={selected?.id ?? null} onSelect={select} show3d={show3d} transit={transit} onRouteSelect={selectRoute} onStopSelect={selectStop} focusedStop={showBuses ? focusedStop : null} connections={connections} onReady={setHandle} className="absolute inset-0" />
+      <CampusMap theme={theme} markers={markers} selectedId={selected?.id ?? null} onSelect={select} show3d={show3d} transit={transit} onRouteSelect={selectRoute} onStopSelect={selectStop} focusedStop={showBuses ? focusedStop : null} connections={connections} matchFocus={focused?.endpoints ?? null} onReady={setHandle} className="absolute inset-0" />
       <TopBar overlay />
       <Bubbles className="hidden md:block" />
 
@@ -134,6 +186,50 @@ export function HomeMap() {
         className={cn("absolute right-3 md:right-4 bottom-24 md:bottom-6 grid size-10 place-items-center rounded-xl glass-strong text-fg-muted hover:text-fg [&_svg]:size-4", showBuses && "hidden md:grid")}>
         <RotateCcw />
       </button>
+
+      {/* A selected match: which two posts are connected, and where. */}
+      {focusMatch && !selected && (
+        <aside aria-label="AquaMatch connection" className={cn("absolute z-20 glass-strong overflow-y-auto scrollbar-thin animate-rise",
+          "md:right-4 md:bottom-6 md:w-[360px] md:max-h-[60vh] md:rounded-2xl",
+          "left-0 right-0 bottom-0 max-h-[70dvh] rounded-t-3xl pb-20 md:pb-0")}>
+          <div className="p-4">
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <div className="aero-eyebrow !mb-1">AquaMatch</div>
+                <h2 className="text-base font-semibold leading-tight">
+                  {matchStrength(focusMatch.score)} <span className="text-mint tabular-nums">· {Math.round(focusMatch.score * 100)}%</span>
+                </h2>
+              </div>
+              <button type="button" onClick={closeFocus} aria-label="Close match view" className="rounded-lg p-1.5 text-fg-muted hover:bg-fg/5 hover:text-fg"><X className="size-4" /></button>
+            </div>
+            <div className="mt-3 space-y-2.5 text-sm">
+              <div className="flex gap-2.5">
+                <span className="mt-1.5 size-2.5 shrink-0 rounded-full bg-[#0e9fde] ring-4 ring-[#0e9fde]/15" aria-hidden />
+                <div className="min-w-0">
+                  <Badge tone="carolina">Request</Badge>
+                  <div className="mt-1 font-medium leading-snug">{focusMatch.request.title}</div>
+                  {getLocation(focusMatch.request.locationId) && <div className="mt-0.5 inline-flex items-center gap-1 text-[11px] text-fg-muted"><MapPin className="size-3" />{getLocation(focusMatch.request.locationId)!.name}</div>}
+                </div>
+              </div>
+              <div className="flex gap-2.5">
+                <span className="mt-1.5 size-2.5 shrink-0 rounded-full bg-mint ring-4 ring-mint/15" aria-hidden />
+                <div className="min-w-0">
+                  <Badge tone="mint">Offer</Badge>
+                  <div className="mt-1 font-medium leading-snug">{focusMatch.offer.title}</div>
+                  {getLocation(focusMatch.offer.locationId) && <div className="mt-0.5 inline-flex items-center gap-1 text-[11px] text-fg-muted"><MapPin className="size-3" />{getLocation(focusMatch.offer.locationId)!.name}</div>}
+                </div>
+              </div>
+            </div>
+            {!focused?.endpoints && <p className="mt-3 text-xs text-fg-muted">One side of this match has no mapped campus location, so there is nothing to draw on the map.</p>}
+            <div className="mt-4 flex items-center gap-2">
+              <Link href={`/connect?match=${focusMatch.id}`} className="aero-button btn-aero inline-flex h-9 items-center gap-1.5 rounded-xl px-3.5 text-xs font-semibold text-white">
+                Open in Connect <ExternalLink className="size-3.5" />
+              </Link>
+              <Badge tone={focusMatch.status === "completed" ? "mint" : "neutral"}>{focusMatch.status}</Badge>
+            </div>
+          </div>
+        </aside>
+      )}
 
       {/* Tapping a pin opens its card: bottom-left on desktop, a sheet on phones. */}
       {selected && (
