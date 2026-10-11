@@ -6,7 +6,7 @@ export default defineConfig({
   expect: { timeout: 15_000 },
   workers: 1,
   retries: 0,
-  use: { baseURL: "http://localhost:3100", trace: "retain-on-failure" },
+  use: { baseURL: "http://localhost:3100", trace: "retain-on-failure", channel: process.env.PLAYWRIGHT_BROWSER_CHANNEL || undefined, launchOptions: { args: ["--enable-unsafe-swiftshader"] } },
   webServer: {
     command: "npm run e2e:server",
     url: "http://localhost:3100/api/health",

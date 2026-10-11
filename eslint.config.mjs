@@ -15,6 +15,11 @@ const eslintConfig = [
     ignores: [
       "node_modules/**",
       ".next/**",
+      ".next-preview/**",
+      "scratch/**",
+      "test-results/**",
+      "playwright-report/**",
+      "public/maplibre-gl-worker.mjs",
       "out/**",
       "build/**",
       "next-env.d.ts",

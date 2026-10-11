@@ -8,6 +8,7 @@ import { unzipSync, strFromU8 } from "fflate";
 import { env } from "@/lib/env";
 import { fetchWithTimeout } from "@/lib/sources/adapters";
 import { HOUR } from "@/lib/time";
+import { dataDirectory } from "@/lib/data-dir";
 
 export type TransitRoute = {
   id: string; shortName: string; longName: string; color: string; textColor: string; url: string | null;
@@ -22,7 +23,7 @@ export type TransitData = {
 export { OFFICIAL_TRACKING_URL, OFFICIAL_ROUTES_URL } from "@/lib/constants";
 import { OFFICIAL_TRACKING_URL, OFFICIAL_ROUTES_URL } from "@/lib/constants";
 const TTL = 24 * HOUR;
-const dir = () => path.resolve(process.env.DATA_DIR || path.join(process.cwd(), "data"), "gtfs");
+const dir = () => path.resolve(dataDirectory(), "gtfs");
 
 /** Minimal RFC-4180 CSV parser (handles quoted commas and doubled quotes). */
 export function parseCsv(text: string): Record<string, string>[] {

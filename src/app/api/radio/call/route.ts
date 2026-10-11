@@ -10,19 +10,21 @@ const Body = z.object({
   sessionId: z.string().trim().min(8).max(80),
   action: z.enum(["start", "say", "end"]),
   message: z.string().trim().min(1).max(400).optional(),
+  history: z.array(z.object({ role: z.enum(["user", "aqua"]), text: z.string().max(1200) })).max(16).optional(),
+  callerName: z.string().trim().min(1).max(40).nullable().optional(),
 });
 
 export const POST = route(async (req) => {
   const me = await currentUser();
   const ip = req.headers.get("x-forwarded-for") ?? "local";
-  const { sessionId, action, message } = await parseBody(req, Body);
+  const { sessionId, action, message, history, callerName } = await parseBody(req, Body);
   const rl = rateLimit(`call:${me?.id ?? ip}`, 40, 60_000);
   if (!rl.ok) throw new ApiError(429, "Slow down — even Aqua's got call volume limits.");
 
   if (action === "start") return json(startCall(sessionId));
   if (action === "end") return json(endCall(sessionId));
   if (!message) throw new ApiError(400, "Nothing to say?");
-  return json(await callTurn(sessionId, message));
+  return json(await callTurn(sessionId, message, Date.now(), history ? { history, callerName: callerName ?? null } : undefined));
 });
 
 export const DELETE = route(async (req) => {

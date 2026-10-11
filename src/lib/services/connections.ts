@@ -1,7 +1,7 @@
 // Matches → acceptance → conversations → messages. All authorization is checked here, server-side.
 
 import { and, desc, eq, inArray, or, sql } from "drizzle-orm";
-import { getDb, schema } from "@/lib/db/client";
+import { getDb, schema, type DB } from "@/lib/db/client";
 import { newId } from "@/lib/ids";
 import { bump } from "@/lib/realtime";
 import { ApiError } from "@/lib/api";
@@ -15,9 +15,8 @@ export type MatchView = Match & {
   myRole: "requester" | "offerer" | null; conversationId: string | null;
 };
 
-async function hydrate(rows: Match[], me: User | null): Promise<MatchView[]> {
+async function hydrate(rows: Match[], me: User | null, db: Pick<DB, "select"> = getDb()): Promise<MatchView[]> {
   if (!rows.length) return [];
-  const db = getDb();
   const postIds = Array.from(new Set(rows.flatMap((m) => [m.requestPostId, m.offerPostId])));
   const posts = (await db.select().from(schema.posts).where(inArray(schema.posts.id, postIds)));
   const byId = new Map(posts.map((p) => [p.id, p]));
@@ -34,9 +33,9 @@ async function hydrate(rows: Match[], me: User | null): Promise<MatchView[]> {
   });
 }
 
-export async function getMatchView(id: string, me: User | null): Promise<MatchView | null> {
-  const row = (await getDb().select().from(schema.matches).where(eq(schema.matches.id, id)).limit(1))[0];
-  return row ? (await hydrate([row], me))[0] ?? null : null;
+export async function getMatchView(id: string, me: User | null, db: Pick<DB, "select"> = getDb()): Promise<MatchView | null> {
+  const row = (await db.select().from(schema.matches).where(eq(schema.matches.id, id)).limit(1))[0];
+  return row ? (await hydrate([row], me, db))[0] ?? null : null;
 }
 
 /** Matches involving any of the user's posts. */
@@ -55,52 +54,62 @@ export async function listRecentMatches(limit = 20, me: User | null = null): Pro
 }
 
 export async function respondToMatch(me: User, matchId: string, action: "accept" | "decline", now = Date.now()): Promise<MatchView> {
-  const db = getDb();
-  const view = (await getMatchView(matchId, me));
-  if (!view) throw new ApiError(404, "Match not found");
-  if (!view.myRole) throw new ApiError(403, "You are not part of this match");
-  if (!["suggested", "accepted"].includes(view.status)) throw new ApiError(409, `Match is already ${view.status}`);
-  const otherId = view.myRole === "requester" ? view.offer.authorId : view.request.authorId;
+  const result = await getDb().transaction(async (db) => {
+    const initial = (await db.select().from(schema.matches).where(eq(schema.matches.id, matchId)).limit(1))[0];
+    if (!initial) throw new ApiError(404, "Match not found");
+    // Lock shared posts in a stable order before the match. Competing matches for one
+    // offer serialize too, so accepting one cannot also accept a second suggestion.
+    const posts = await db.select().from(schema.posts).where(inArray(schema.posts.id, [initial.requestPostId, initial.offerPostId])).orderBy(schema.posts.id).for("update");
+    const row = (await db.select().from(schema.matches).where(eq(schema.matches.id, matchId)).for("update"))[0];
+    const view = row ? (await hydrate([row], me, db))[0] : null;
+    if (!view) throw new ApiError(404, "Match not found");
+    if (!view.myRole) throw new ApiError(403, "You are not part of this match");
+    if (!["suggested", "accepted"].includes(view.status)) throw new ApiError(409, `Match is already ${view.status}`);
+    if (view.status === "accepted") {
+      if (action === "accept") return view; // repeated clicks are idempotent
+      throw new ApiError(409, "This match is accepted. Leave the connection instead.");
+    }
+    if (action === "accept" && posts.some((p) => p.status !== "open" || (p.expiresAt && p.expiresAt.getTime() <= now))) throw new ApiError(409, "A post is no longer available");
+    const otherId = view.myRole === "requester" ? view.offer.authorId : view.request.authorId;
 
-  if (action === "decline") {
-    (await db.update(schema.matches).set({ status: "declined", updatedAt: new Date(now) }).where(eq(schema.matches.id, matchId)));
-    if (otherId) (await notify(otherId, { type: "match_declined", title: "Match declined", body: `${me.displayName} passed on "${view.myRole === "requester" ? view.offer.title : view.request.title}".`, href: "/connect", dedupeKey: `declined:${matchId}` }));
-    bump("matches");
-    return (await getMatchView(matchId, me))!;
-  }
+    if (action === "decline") {
+      (await db.update(schema.matches).set({ status: "declined", updatedAt: new Date(now) }).where(eq(schema.matches.id, matchId)));
+      if (otherId) (await notify(otherId, { type: "match_declined", title: "Match declined", body: `${me.displayName} passed on "${view.myRole === "requester" ? view.offer.title : view.request.title}".`, href: "/connect", dedupeKey: `declined:${matchId}` }, db));
+      return (await getMatchView(matchId, me, db))!;
+    }
 
-  const patch: Partial<Match> = { updatedAt: new Date(now) };
-  if (view.myRole === "requester") patch.requesterAccepted = true; else patch.offererAccepted = true;
-  const both = (view.myRole === "requester" ? view.offererAccepted : view.requesterAccepted) === true;
-  if (both) patch.status = "accepted";
-  (await db.update(schema.matches).set(patch).where(eq(schema.matches.id, matchId)));
+    const patch: Partial<Match> = { updatedAt: new Date(now) };
+    if (view.myRole === "requester") patch.requesterAccepted = true; else patch.offererAccepted = true;
+    const both = (view.myRole === "requester" ? view.offererAccepted : view.requesterAccepted) === true;
+    if (both) patch.status = "accepted";
+    (await db.update(schema.matches).set(patch).where(eq(schema.matches.id, matchId)));
 
-  if (both) {
-    // Open the conversation exactly once, with both participants.
-    let conv = (await db.select().from(schema.conversations).where(eq(schema.conversations.matchId, matchId)).limit(1))[0];
-    if (!conv) {
-      conv = { id: newId("c"), matchId, createdAt: new Date(now), updatedAt: new Date(now) };
-      (await db.insert(schema.conversations).values(conv));
-      for (const uid of [view.request.authorId, view.offer.authorId]) {
-        if (uid) (await db.insert(schema.conversationParticipants).values({ conversationId: conv.id, userId: uid, lastReadAt: null }).onConflictDoNothing());
+    if (both) {
+      // Open the conversation exactly once, with both participants.
+      let conv = (await db.select().from(schema.conversations).where(eq(schema.conversations.matchId, matchId)).limit(1))[0];
+      if (!conv) {
+        conv = { id: newId("c"), matchId, createdAt: new Date(now), updatedAt: new Date(now) };
+        (await db.insert(schema.conversations).values(conv));
+        for (const uid of [view.request.authorId, view.offer.authorId]) {
+          if (uid) (await db.insert(schema.conversationParticipants).values({ conversationId: conv.id, userId: uid, lastReadAt: null }).onConflictDoNothing());
+        }
       }
+      (await db.update(schema.posts).set({ status: "matched", updatedAt: new Date(now) }).where(inArray(schema.posts.id, [view.requestPostId, view.offerPostId])));
+      // Other suggestions for these posts are no longer relevant.
+      (await db.update(schema.matches).set({ status: "cancelled", updatedAt: new Date(now) }).where(and(
+        eq(schema.matches.status, "suggested"),
+        or(eq(schema.matches.requestPostId, view.requestPostId), eq(schema.matches.offerPostId, view.offerPostId)),
+      )));
+      for (const uid of [view.request.authorId, view.offer.authorId]) {
+        if (uid) (await notify(uid, { type: "match_accepted", title: "You're connected", body: `Both of you accepted. Say hi in Messages.`, href: `/messages/${conv.id}`, dedupeKey: `connected:${matchId}` }, db));
+      }
+    } else if (otherId) {
+      (await notify(otherId, { type: "match_accepted", title: `${me.displayName} accepted a match`, body: `Accept too to open a conversation about "${view.request.title}".`, href: `/connect?match=${matchId}`, dedupeKey: `accepted:${matchId}:${me.id}` }, db));
     }
-    (await db.update(schema.posts).set({ status: "matched", updatedAt: new Date(now) }).where(inArray(schema.posts.id, [view.requestPostId, view.offerPostId])));
-    // Other suggestions for these posts are no longer relevant.
-    (await db.update(schema.matches).set({ status: "cancelled", updatedAt: new Date(now) }).where(and(
-      eq(schema.matches.status, "suggested"),
-      or(eq(schema.matches.requestPostId, view.requestPostId), eq(schema.matches.offerPostId, view.offerPostId)),
-    )));
-    for (const uid of [view.request.authorId, view.offer.authorId]) {
-      if (uid) (await notify(uid, { type: "match_accepted", title: "You're connected", body: `Both of you accepted. Say hi in Messages.`, href: `/messages/${conv.id}`, dedupeKey: `connected:${matchId}` }));
-    }
-    bump("posts");
-    bump("messages");
-  } else if (otherId) {
-    (await notify(otherId, { type: "match_accepted", title: `${me.displayName} accepted a match`, body: `Accept too to open a conversation about "${view.request.title}".`, href: `/connect?match=${matchId}`, dedupeKey: `accepted:${matchId}:${me.id}` }));
-  }
-  bump("matches");
-  return (await getMatchView(matchId, me))!;
+    return (await getMatchView(matchId, me, db))!;
+  });
+  bump("matches"); bump("posts"); bump("messages"); bump("notifications");
+  return result;
 }
 
 export async function completeMatch(me: User, matchId: string, now = Date.now()): Promise<MatchView> {
@@ -226,8 +235,10 @@ export async function getConversation(me: User, id: string) {
 export async function listMessages(me: User, conversationId: string, limit = 200) {
   (await assertParticipant(conversationId, me.id));
   const db = getDb();
-  const rows = (await db.select().from(schema.messages).where(eq(schema.messages.conversationId, conversationId)).orderBy(schema.messages.createdAt).limit(limit));
-  (await db.update(schema.conversationParticipants).set({ lastReadAt: new Date() })
+  const rows = (await db.select().from(schema.messages).where(eq(schema.messages.conversationId, conversationId))
+    .orderBy(desc(schema.messages.createdAt), desc(schema.messages.id)).limit(limit)).reverse();
+  // Mark only the messages actually returned, so concurrent arrivals remain unread.
+  if (rows.length) (await db.update(schema.conversationParticipants).set({ lastReadAt: rows[rows.length - 1].createdAt })
     .where(and(eq(schema.conversationParticipants.conversationId, conversationId), eq(schema.conversationParticipants.userId, me.id))));
   return rows;
 }

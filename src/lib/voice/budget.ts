@@ -7,7 +7,11 @@ const CACHE_MS = 5 * 60 * 1000;
 let cache: { at: number; remaining: number; limit: number } | null = null;
 let warned = false;
 
-export const reserveChars = () => Math.max(0, Number(process.env.ELEVENLABS_RESERVE_CHARS) || 3000);
+export const reserveChars = () => {
+  const raw = process.env.ELEVENLABS_RESERVE_CHARS;
+  const value = raw?.trim() ? Number(raw) : 3000;
+  return Number.isFinite(value) ? Math.max(0, value) : 3000;
+};
 export const radioVoiceMode = () => (process.env.RADIO_VOICE === "browser" ? "browser" : "auto");
 const apiKey = () => process.env.ELEVENLABS_API_KEY || "";
 
@@ -18,7 +22,7 @@ export async function subscription(): Promise<VoiceBudget> {
   if (!apiKey()) return null;
   if (cache && Date.now() - cache.at < CACHE_MS) return { remaining: cache.remaining, limit: cache.limit };
   try {
-    const res = await fetch("https://api.elevenlabs.io/v1/user/subscription", { headers: { "xi-api-key": apiKey() } });
+    const res = await fetch("https://api.elevenlabs.io/v1/user/subscription", { headers: { "xi-api-key": apiKey() }, signal: AbortSignal.timeout(8000) });
     if (!res.ok) return cache ? { remaining: cache.remaining, limit: cache.limit } : null;
     const d = (await res.json()) as { character_limit?: number; character_count?: number };
     const limit = d.character_limit ?? 0;

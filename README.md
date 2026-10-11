@@ -14,7 +14,7 @@ Uses **Tiger Data PostgreSQL**, deterministic AI fallbacks, and five real public
 | **Campus intelligence** | Gemini (structured JSON, Zod-validated) parses messy student messages into type, category, item, location, time window, urgency. A deterministic parser covers the same ground with no key. |
 | **Community connections** | Requests and offers (borrow/lend, tutoring, study, lost & found, free food, rides). Explainable matching (item 40% · availability 25% · location 20% · keywords 15%), hard rejects, accept/decline, in-app chat, completion. |
 | **AI media studio** | Campus Flash, Campus Radio, Podcast Deep Dive, Text Digest and "Your Carolina Letter", generated only from stored records, stored as immutable snapshots. ElevenLabs voice or browser speech. |
-| **Transit** | Real Chapel Hill Transit GTFS (22 routes, ~520 stops, route geometry) with a labeled demo fallback. No fake live buses; official tracker linked. |
+| **Transit** | Bus toggle on the live map: Chapel Hill Transit GTFS routes, searchable stops, schedule links, service notices, and clearly labeled simulated 3D buses. Official real-time tracker linked. |
 | **Assistant** | "What's happening near Davis?" → retrieval over our own data → grounded answer with sources. Drafts posts; never publishes without confirmation. |
 | **iMessage (Photon Spectrum)** | Worker process using the official `spectrum-ts` contract, sharing the same services and DB. One-time link codes. Local simulator when not connected. |
 | **Notifications, profiles, demo mode** | Deduplicated notification center, guest profiles with signed HttpOnly sessions, labeled demo accounts, a Demo Control Panel for judges. |
@@ -59,6 +59,9 @@ Copy `.env.example` to `.env`. A PostgreSQL connection is required; AI and voice
 | `SPECTRUM_PROJECT_ID`, `SPECTRUM_PROJECT_SECRET` | Photon Spectrum credentials (exact names the SDK reads) | "Photon not connected"; web app unaffected |
 | `CRON_SECRET` | Bearer token for `/api/sources/refresh`, `/api/transit/refresh`, `/api/integrations/probe` | those routes are open only in demo mode |
 | `TRANSIT_GTFS_URL` | Chapel Hill Transit GTFS zip | verified default |
+| `DATA_DIR` | Writable directory for audio and GTFS caches | `data/` locally; temporary storage on Vercel |
+| `RADIO_VOICE` | `auto` for ElevenLabs when budget allows, or `browser` | `auto` |
+| `ELEVENLABS_RESERVE_CHARS` | Characters to leave unused by the station/call voice | `3000`; `0` is allowed |
 
 ### Adding Gemini
 Set `GEMINI_API_KEY` (and optionally `GEMINI_MODEL`, default `gemini-3.8-flash`). Restart. The `/developer` page's "Run live probe" validates the key. Parsing, assistant answers, event classification and briefing scripts switch to Gemini automatically; every output is validated with Zod and locations are checked against the campus registry before anything is saved.
@@ -94,7 +97,7 @@ The radio station's background music in `public/music/` is synthesized in-house 
 
 ## Transit data
 
-`src/lib/services/transit.ts` downloads the Chapel Hill Transit GTFS zip (verified at https://mychtransit.org/gtfs), parses `routes/stops/trips/shapes/stop_times` with a tiny CSV parser, builds per-route GeoJSON and stop lists, and caches the result for 24h in `data/gtfs/cht.json` and memory. The feed is schedule-only; real-time vehicle positions are **not** shown, and the UI links to the official tracker. If the download fails (offline venue), a clearly labeled DEMO overlay with approximate geometry is used instead.
+`src/lib/services/transit.ts` downloads the Chapel Hill Transit GTFS zip, parses `routes/stops/trips/shapes/stop_times`, builds per-route GeoJSON and stop lists, and caches the result for 24h. The live map's Buses toggle adds routes and simulated vehicles while preserving the blue buildings and camera. Vehicles are labeled **simulated**, not real-time tracking. The panel links to the official tracker. If the download fails, a labeled DEMO overlay with approximate geometry is used instead. Old `/transit` links redirect to `/?buses=1`.
 
 ## Tests
 
@@ -102,17 +105,18 @@ The radio station's background music in `public/music/` is synthesized in-house 
 npm run typecheck   # tsc --noEmit
 npm run lint        # eslint
 npm test            # vitest: parser, matching, services (posts/matches/messages/notifications/briefings/assistant), sources, GTFS, markers
+npm run test:voice # mocked live-call browser regression checks; requires Chrome
 npm run build       # production build (must pass before e2e)
 npm run test:e2e    # playwright: homepage/map, navigation, two-user request→offer→match→chat→complete, assistant, radio, transit, discover, mobile
 ```
 
-E2E runs on port 3100 against an isolated `data/e2e.db`. Run `npm run build` first; the e2e server reuses the production build (it falls back to the dev server when no build exists).
+E2E runs on port 3100 against an isolated PostgreSQL schema, configured by `TEST_DATABASE_URL` or `TIGER_DATABASE_URL`. It reuses a production build in `.next-preview` (built with `AQUA_PREVIEW=true`) or falls back to a separate dev server. Set `PLAYWRIGHT_BROWSER_CHANNEL=chrome` to use installed Chrome instead of Playwright's bundled Chromium. Tests never reset public application data.
 
 ## Deployment
 
 Use Node 24 and a reachable Tiger Data PostgreSQL service. Set `DATABASE_URL`, `AUTH_SECRET`, `APP_BASE_URL` and `DEMO_MODE=false` (or `true` for a judged demo), then run `npm ci && npm run db:migrate && npm run build && npm start`. Run setup only when intentionally seeding demo data. The Photon worker runs as a second process with the same database settings.
 
-Database records are shared through PostgreSQL. Audio and GTFS caches still use `data/`, and SSE notifications, channel drafts and rate limits are process-local; account for those separately when deploying multiple instances or a serverless host.
+Database records are shared through PostgreSQL. On Vercel, audio and GTFS caches default to writable temporary storage; these files are ephemeral and can be regenerated. Live calls carry recent context in each request, so conversation continuity does not require the same server instance and transcripts are not persisted to the database. If Gemini is unavailable, live calls display an availability notice instead of speaking a canned reply. Other AI features retain their labeled local fallbacks. SSE notifications, channel drafts and rate limits remain process-local; account for those separately when deploying multiple instances or a serverless host.
 
 ## Project layout
 

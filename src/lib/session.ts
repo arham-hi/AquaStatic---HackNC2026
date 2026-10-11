@@ -22,7 +22,9 @@ export function encodeSession(uid: string): string {
 
 export function decodeSession(token: string | undefined | null): Payload | null {
   if (!token) return null;
-  const [data, sig] = token.split(".");
+  const parts = token.split(".");
+  if (parts.length !== 2 || token.length > 4096) return null;
+  const [data, sig] = parts;
   if (!data || !sig) return null;
   const expected = sign(data);
   const a = Buffer.from(sig);
@@ -30,7 +32,9 @@ export function decodeSession(token: string | undefined | null): Payload | null 
   if (a.length !== b.length || !timingSafeEqual(a, b)) return null;
   try {
     const p = JSON.parse(unb64(data)) as Payload;
-    return typeof p.uid === "string" ? p : null;
+    const now = Date.now();
+    return typeof p.uid === "string" && p.uid.length > 0 && Number.isSafeInteger(p.iat)
+      && p.iat <= now + 5 * 60_000 && now - p.iat <= MAX_AGE_S * 1000 ? p : null;
   } catch {
     return null;
   }

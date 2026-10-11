@@ -28,6 +28,8 @@ type Session = {
   touched: number;
 };
 
+export type CallContext = { history: Session["history"]; callerName: string | null };
+
 const sessions = new Map<string, Session>();
 const SESSION_TTL = 30 * 60 * 1000;
 const MAX_SESSIONS = 60;
@@ -167,8 +169,15 @@ function localReply(message: string, s: Session, picked: FeedItem[], intent: str
 
 // ---------- the turn ----------
 
-export async function callTurn(sessionId: string, message: string, now = Date.now()): Promise<CallTurn> {
-  const s = getSession(sessionId);
+export async function callTurn(sessionId: string, message: string, now = Date.now(), context?: CallContext): Promise<CallTurn> {
+  // The browser carries its own recent transcript. This is conversation context,
+  // never identity/authorization, and avoids relying on one warm Vercel instance.
+  const previous = context?.history.slice().reverse().filter((line) => line.role === "user")
+    .map((line) => interpretQueryLocal(line.text)).find((intent) => intent.intent !== "unknown");
+  const s: Session = context ? {
+    callerName: context.callerName, history: context.history.map((line) => ({ ...line })),
+    lastIntent: previous?.intent ?? null, lastKeywords: previous?.keywords ?? [], touched: now,
+  } : getSession(sessionId);
   const nameGuess = callerNameFrom(message, !!s.callerName);
   if (nameGuess) s.callerName = nameGuess;
 

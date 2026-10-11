@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Map as MapIcon, Radio, HeartHandshake, Bus, Plus } from "lucide-react";
+import { Map as MapIcon, Radio, HeartHandshake, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useUI } from "./providers";
 import { Tip } from "@/components/ui/primitives";
@@ -11,7 +11,6 @@ export const NAV = [
   { href: "/", label: "Live Map", icon: MapIcon },
   { href: "/radio", label: "Radio", icon: Radio },
   { href: "/connect", label: "Connect", icon: HeartHandshake },
-  { href: "/transit", label: "Bus", icon: Bus },
 ] as const;
 
 const isActive = (path: string, href: string) => (href === "/" ? path === "/" : path.startsWith(href));
@@ -31,7 +30,7 @@ export function Logo({ compact = false }: { compact?: boolean }) {
   );
 }
 
-/** Desktop: slim left rail with four destinations. */
+/** Desktop: slim left rail with three destinations. */
 export function NavRail() {
   const path = usePathname();
   return (
@@ -49,14 +48,14 @@ export function NavRail() {
   );
 }
 
-/** Phone: bottom bar with the four destinations and a post button in the middle. */
+/** Phone: three destinations and a post button. */
 export function BottomNav() {
   const path = usePathname();
   const { openCreate } = useUI();
-  const items = [NAV[0], NAV[1], null, NAV[2], NAV[3]] as const;
+  const items = [NAV[0], NAV[1], NAV[2], null] as const;
   return (
     <nav aria-label="Primary" className="aero-bottom-nav md:hidden fixed bottom-0 inset-x-0 z-40 border-t border-border bg-bg-elev/90 backdrop-blur-xl pb-[env(safe-area-inset-bottom)]">
-      <div className="grid grid-cols-5 h-16">
+      <div className="grid grid-cols-4 h-16">
         {items.map((it, i) => it ? (
           <Link key={it.href} href={it.href} aria-label={it.label} aria-current={isActive(path, it.href) ? "page" : undefined}
             className={cn("flex flex-col items-center justify-center gap-0.5 text-[10px] font-medium text-fg-muted", isActive(path, it.href) && "text-carolina")}>

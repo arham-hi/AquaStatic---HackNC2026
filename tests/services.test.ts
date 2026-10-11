@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import { freshDb } from "./setup";
+import { sql } from "drizzle-orm";
 
 await freshDb("services");
 
@@ -58,6 +59,22 @@ describe("post validation and persistence", () => {
 });
 
 describe("matching → acceptance → messaging → completion", () => {
+  it("opens one conversation when both participants accept simultaneously", async () => {
+    const input = { category: "borrowing", locationId: "davis-library", expiry: "3h", attributes: { item: "audit_adapter", powerClass: "cable" }, keywords: ["audit_adapter"] };
+    const request = await createPost(maya, CreatePostSchema.parse({ ...input, type: "request", title: "Need an audit adapter", description: "Need an audit adapter at Davis Library" }));
+    const offer = await createPost(jordan, CreatePostSchema.parse({ ...input, type: "offer", title: "Offering an audit adapter", description: "Offering an audit adapter at Davis Library" }));
+    const match = offer.matches.find((m) => m.requestPostId === request.post.id)!;
+    expect(match).toBeTruthy();
+    await Promise.all(Array.from({ length: 5 }, () => getDb().execute(sql`select pg_sleep(0.1)`)));
+    await Promise.all([respondToMatch(maya, match.id, "accept"), respondToMatch(jordan, match.id, "accept")]);
+    const view = (await listMyMatches(maya)).find((m) => m.id === match.id)!;
+    expect(view.status).toBe("accepted");
+    expect(view.conversationId).toBeTruthy();
+    await Promise.all([respondToMatch(maya, match.id, "accept"), respondToMatch(jordan, match.id, "accept")]);
+    const conversations = (await listConversations(maya)).filter((c) => c.matchId === match.id);
+    expect(conversations).toHaveLength(1);
+    expect(conversations[0].participants).toHaveLength(2);
+  });
   let matchId: string;
   it("creates a suggested match and notifies both participants", async () => {
     const r1 = await postFromText(maya, "Need a USB-C laptop charger at Davis Library for the next hour");
@@ -194,5 +211,25 @@ describe("kept-in-use tally", () => {
     expect(before.borrowed).toBeGreaterThanOrEqual(1);
     expect(before.total).toBe(before.borrowed + before.rehomed + before.returned + before.rides + before.food);
     expect(sharedSummary(before)).toMatch(/borrowed/);
+  });
+});
+
+describe("long conversations", () => {
+  it("returns the latest 200 messages in chronological order", async () => {
+    const db = getDb();
+    const id = "c_audit_long_chat";
+    const start = Date.now() - 10000;
+    await db.insert(schema.conversations).values({ id, createdAt: new Date(start), updatedAt: new Date(start) });
+    await db.insert(schema.conversationParticipants).values([
+      { conversationId: id, userId: maya.id }, { conversationId: id, userId: jordan.id },
+    ]);
+    await db.insert(schema.messages).values(Array.from({ length: 201 }, (_, i) => ({
+      id: `msg_audit_${i}`, conversationId: id, senderId: jordan.id,
+      content: `Message ${i}`, createdAt: new Date(start + i * 10),
+    })));
+    const messages = await listMessages(maya, id);
+    expect(messages).toHaveLength(200);
+    expect(messages[0].content).toBe("Message 1");
+    expect(messages.at(-1)?.content).toBe("Message 200");
   });
 });

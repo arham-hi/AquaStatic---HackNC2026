@@ -31,7 +31,7 @@ export function CallPanel({ call }: { call: Call }) {
         <span className="ml-auto text-xs font-semibold text-fg-muted" role="status">{call.status}</span>
       </div>
       <p className="mt-1 text-[11px] text-fg-faint">
-        Aqua is an AI host, not a person. Your mic audio stays on this device — nothing is broadcast, saved, or transcribed into the station log.
+        Aqua is an AI host, not a person. Your browser handles speech recognition. This call is private and isn&apos;t broadcast or saved to the station log.
       </p>
 
       {/* transcript */}
@@ -87,6 +87,14 @@ export function CallPanel({ call }: { call: Call }) {
             call.micOn ? "text-carolina" : "text-fg-muted")}
         >
           {call.micOn ? <Mic className="size-5" /> : <MicOff className="size-5" />}
+        </button>
+        <button
+          type="button"
+          onClick={call.interrupt}
+          disabled={!["speaking", "thinking", "greeting"].includes(call.phase)}
+          className="aero-button inline-flex h-11 items-center gap-2 rounded-full border border-border bg-bg-elev/80 px-4 text-sm font-semibold disabled:opacity-40"
+        >
+          <Mic className="size-4" /> Interrupt
         </button>
         <button
           type="button"

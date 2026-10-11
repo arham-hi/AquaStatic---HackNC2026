@@ -122,7 +122,7 @@ export function useStation() {
   }, []);
 
   const duckMusic = useCallback((speech: boolean) => {
-    setMusicGain(mutedRef.current ? 0 : speech ? DUCK_LEVEL : MUSIC_LEVEL);
+    setMusicGain(mutedRef.current || suspendedRef.current ? 0 : speech ? DUCK_LEVEL : MUSIC_LEVEL);
   }, [setMusicGain]);
 
   const nextTrack = useCallback(() => {
@@ -251,6 +251,7 @@ export function useStation() {
         if (seg.kind !== "alert" && seg.kind !== "time_check") emitFx(/found|matched|resolved|picked up|thanks|won|free food/i.test(seg.text) ? "celebrate" : "bounce");
         let ok = false;
         if (seg.audioProvider === "elevenlabs") ok = await playMp3(seg);
+        if (suspendedRef.current || !tunedRef.current) return;
         if (!ok) {
           if (hasTts()) await speakSegment(seg);
           else { setVoiceMode("text"); await readSilently(seg); }
@@ -419,6 +420,8 @@ export function useStation() {
   const suspendStation = useCallback(() => {
     if (suspendedRef.current) return;
     suspendedRef.current = true;
+    // Invalidate an MP3 fetch before cancelling it: its late response must not play.
+    genRef.current++;
     // Put the in-flight segment back at the head so nothing is lost.
     if (currentRef.current) {
       queueRef.current.unshift(currentRef.current);

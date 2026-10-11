@@ -11,7 +11,9 @@ import { categoryMeta } from "@/lib/categories";
 import type { FeedItem } from "@/lib/services/feed";
 import type { TransitRoute, TransitStop } from "@/lib/services/transit";
 import { addWalkersWhenReady } from "./walkers-layer";
-import { addAeroBuildings, removeAeroBuildings } from "./aero-buildings";
+import { removeAeroBuildings } from "./aero-buildings";
+import { createBusJourneys } from "@/components/transit/simulated-buses";
+import { BUS_LAYER_ID, createBusModelLayer } from "@/components/transit/bus-model-layer";
 
 export const STYLE_URLS = { light: "https://tiles.openfreemap.org/styles/liberty", dark: "https://tiles.openfreemap.org/styles/dark" } as const;
 export const HOME_CAMERA = { center: CAMPUS_CENTER as [number, number], zoom: 15.6, pitch: 55, bearing: -17 };
@@ -34,7 +36,10 @@ type Props = {
   selectedId: string | null;
   onSelect: (item: FeedItem | null) => void;
   show3d: boolean;
-  transit: { routes: TransitRoute[]; stops: TransitStop[]; selectedRouteId: string | null } | null;
+  transit: { routes: TransitRoute[]; stops: TransitStop[]; selectedRouteId: string | null; busesEnabled?: boolean } | null;
+  onRouteSelect?: (id: string) => void;
+  onStopSelect?: (stop: TransitStop) => void;
+  focusedStop?: TransitStop | null;
   connections: ConnectionLine[];
   onReady?: (h: MapHandle) => void;
   userLocation?: { lat: number; lng: number } | null;
@@ -51,7 +56,8 @@ function jitter(id: string, index: number): [number, number] {
 }
 
 function add3d(map: maplibregl.Map, dark: boolean) {
-    addAeroBuildings(map, dark);
+  // Use one blue extrusion layer; the brick layer used to cover it at lower zooms.
+  removeAeroBuildings(map);
   if (!map.getSource("openmaptiles") || map.getLayer("aqua-3d")) return;
   const labelLayer = map.getStyle().layers.find((l: maplibregl.LayerSpecification) => l.type === "symbol" && (l.layout as Record<string, unknown> | undefined)?.["text-field"])?.id;
   // Hide the style's own extrusion layer if present so we control the look.
@@ -105,7 +111,7 @@ function arc(from: [number, number], to: [number, number], n = 32): [number, num
   return pts;
 }
 
-export function CampusMap({ theme, markers, selectedId, onSelect, show3d, transit, connections, onReady, userLocation, className }: Props) {
+export function CampusMap({ theme, markers, selectedId, onSelect, show3d, transit, onRouteSelect, onStopSelect, focusedStop, connections, onReady, userLocation, className }: Props) {
   const el = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const markerRefs = useRef(new Map<string, { marker: maplibregl.Marker; root: Root; el: HTMLDivElement }>());
@@ -116,10 +122,16 @@ export function CampusMap({ theme, markers, selectedId, onSelect, show3d, transi
   const show3dRef = useRef(show3d);
   show3dRef.current = show3d;
   const themeRef = useRef(theme);
+  const loadedRef = useRef(false);
+  const transitRef = useRef({ transit, onRouteSelect, onStopSelect });
+  transitRef.current = { transit, onRouteSelect, onStopSelect };
+  const busHit = useRef<((point: maplibregl.PointLike) => string | null) | null>(null);
+  const simulationSeconds = useRef(0);
 
   // ---- init ----
   useEffect(() => {
     if (!el.current || mapRef.current) return;
+    const markersForMap = markerRefs.current;
     const map = new maplibregl.Map({
       container: el.current, style: STYLE_URLS[theme], ...HOME_CAMERA, minZoom: 12, maxZoom: 19, attributionControl: false,
       maxBounds: [[-79.14, 35.86], [-78.96, 35.96]], canvasContextAttributes: { antialias: true },
@@ -128,14 +140,38 @@ export function CampusMap({ theme, markers, selectedId, onSelect, show3d, transi
     map.dragRotate.enable();
     map.touchZoomRotate.enableRotation();
     map.on("style.load", () => {
+      loadedRef.current = true;
+      // Keep the base footprints blue too, including while zooming out or disabling 3D.
+      const blue = themeRef.current === "dark" ? "#1c2b4d" : "#dcefff";
+      for (const layer of map.getStyle().layers) {
+        if ("source-layer" in layer && layer["source-layer"] === "building") {
+          if (layer.type === "fill") map.setPaintProperty(layer.id, "fill-color", blue);
+          if (layer.type === "fill-extrusion") map.setPaintProperty(layer.id, "fill-extrusion-color", blue);
+        }
+      }
       ensureOverlaySources(map);
       if (show3dRef.current) add3d(map, themeRef.current === "dark");
       addWalkersWhenReady(map);
       setStyleReady((n) => n + 1);
     });
     map.on("click", (e: maplibregl.MapMouseEvent) => {
+      const current = transitRef.current;
+      const busRoute = busHit.current?.(e.point);
+      if (busRoute) { current.onRouteSelect?.(busRoute); return; }
       const feats = map.queryRenderedFeatures(e.point, { layers: ["transit-routes-line", "transit-stops-circle"].filter((l) => map.getLayer(l)) });
+      const stop = feats.find((f) => f.layer.id === "transit-stops-circle");
+      if (stop) {
+        const found = current.transit?.stops.find((s) => s.id === stop.properties.id);
+        if (found) current.onStopSelect?.(found);
+        return;
+      }
+      const route = feats.find((f) => f.layer.id === "transit-routes-line");
+      if (route) { current.onRouteSelect?.(route.properties.id as string); return; }
       if (!feats.length) onSelectRef.current(null);
+    });
+    map.on("mousemove", (e) => {
+      const layers = ["transit-routes-line", "transit-stops-circle"].filter((id) => map.getLayer(id));
+      map.getCanvas().style.cursor = busHit.current?.(e.point) || (layers.length && map.queryRenderedFeatures(e.point, { layers }).length) ? "pointer" : "";
     });
     mapRef.current = map;
     // Debug handle for the 3D-map teammate and for automated render checks (`window.__aquaMap`).
@@ -151,7 +187,16 @@ export function CampusMap({ theme, markers, selectedId, onSelect, show3d, transi
     onReady?.(handle);
     const ro = new ResizeObserver(() => map.resize());
     ro.observe(el.current);
-    return () => { ro.disconnect(); map.remove(); mapRef.current = null; };
+    return () => {
+      ro.disconnect();
+      // Dev StrictMode remounts this map. Never reuse DOM markers from the removed instance.
+      for (const ref of markersForMap.values()) {
+        ref.marker.remove();
+        queueMicrotask(() => ref.root.unmount());
+      }
+      markersForMap.clear();
+      map.remove(); mapRef.current = null;
+    };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ---- theme ----
@@ -159,15 +204,19 @@ export function CampusMap({ theme, markers, selectedId, onSelect, show3d, transi
     const map = mapRef.current;
     if (!map || themeRef.current === theme) return;
     themeRef.current = theme;
+    loadedRef.current = false;
     map.setStyle(STYLE_URLS[theme], { diff: false });
   }, [theme]);
 
   // ---- 3D toggle ----
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !map.isStyleLoaded()) return;
+    if (!map || !loadedRef.current) return;
     if (show3d) add3d(map, theme === "dark");
-    else if (map.getLayer("aqua-3d")) map.removeLayer("aqua-3d");
+    else {
+      if (map.getLayer("aqua-3d")) map.removeLayer("aqua-3d");
+      removeAeroBuildings(map);
+    }
   }, [show3d, theme, styleReady]);
 
   // ---- markers ----
@@ -226,15 +275,62 @@ export function CampusMap({ theme, markers, selectedId, onSelect, show3d, transi
   // ---- transit overlay ----
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !map.isStyleLoaded() || !map.getSource("transit-routes")) return;
+    if (!map || !loadedRef.current || !map.getSource("transit-routes")) return;
     const routes = (map.getSource("transit-routes") as maplibregl.GeoJSONSource);
     const stops = (map.getSource("transit-stops") as maplibregl.GeoJSONSource);
     if (!transit) { routes.setData({ type: "FeatureCollection", features: [] }); stops.setData({ type: "FeatureCollection", features: [] }); return; }
     const sel = transit.selectedRouteId;
     routes.setData({ type: "FeatureCollection", features: transit.routes.map((r) => ({ type: "Feature", geometry: r.geometry, properties: { id: r.id, color: r.color, selected: r.id === sel, dim: !!sel && r.id !== sel } })) });
     const stopSet = sel ? new Set(transit.routes.find((r) => r.id === sel)?.stopIds ?? []) : null;
-    stops.setData({ type: "FeatureCollection", features: transit.stops.filter((s) => !stopSet || stopSet.has(s.id)).map((s) => ({ type: "Feature", geometry: { type: "Point", coordinates: [s.lng, s.lat] }, properties: { name: s.name } })) });
+    const routeColor = transit.routes.find((r) => r.id === sel)?.color ?? "#f97316";
+    map.setPaintProperty("transit-stops-circle", "circle-stroke-color", routeColor);
+    stops.setData({ type: "FeatureCollection", features: transit.stops.filter((s) => !stopSet || stopSet.has(s.id)).map((s) => ({ type: "Feature", geometry: { type: "Point", coordinates: [s.lng, s.lat] }, properties: { id: s.id, name: s.name } })) });
   }, [transit, styleReady]);
+
+  // One animated bus per route, using the same models/speeds as the dedicated bus map.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !loadedRef.current || !transit || transit.busesEnabled === false) return;
+    const routes = transit.selectedRouteId ? transit.routes.filter((r) => r.id === transit.selectedRouteId) : transit.routes;
+    const models = createBusModelLayer(createBusJourneys(routes, transit.stops), simulationSeconds);
+    map.addLayer(models.layer);
+    busHit.current = models.hit;
+    return () => {
+      busHit.current = null;
+      if (map.getLayer(BUS_LAYER_ID)) map.removeLayer(BUS_LAYER_ID);
+    };
+  }, [transit, styleReady]);
+
+  const routeId = transit?.selectedRouteId;
+  const routeGeometry = transit?.routes.find((r) => r.id === routeId)?.geometry;
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !routeGeometry) return;
+    const bounds = new maplibregl.LngLatBounds();
+    for (const line of routeGeometry.coordinates) for (const point of line) bounds.extend(point as [number, number]);
+    if (!bounds.isEmpty()) map.fitBounds(bounds, { padding: window.innerWidth >= 768 ? { top: 170, left: 60, bottom: 60, right: 420 } : { top: 140, left: 35, bottom: Math.min(window.innerHeight * 0.5, 420), right: 35 }, maxZoom: 16, duration: 900 });
+  }, [routeId, routeGeometry]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    map.setMaxBounds(transit ? null : [[-79.14, 35.86], [-78.96, 35.96]]);
+    map.setMinZoom(transit ? 10 : 12);
+  }, [!!transit]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !focusedStop) return;
+    const content = document.createElement("div");
+    content.className = "glass-strong rounded-xl px-3 py-2 text-fg";
+    const name = document.createElement("div");
+    name.className = "text-sm font-semibold"; name.textContent = focusedStop.name;
+    const code = document.createElement("div");
+    code.className = "text-xs text-fg-muted"; code.textContent = `Stop ${focusedStop.code}`;
+    content.append(name, code);
+    const popup = new maplibregl.Popup({ offset: 10 }).setLngLat([focusedStop.lng, focusedStop.lat]).setDOMContent(content).addTo(map);
+    return () => { popup.remove(); };
+  }, [focusedStop]);
 
   // ---- connections (match animation) ----
   useEffect(() => {

@@ -73,6 +73,20 @@ describe("live call service", () => {
     expect(t.reply.toLowerCase()).toMatch(/calcul|study|board/);
   });
 
+  it("keeps follow-up context when the next turn reaches a different server instance", async () => {
+    await post("Need a geometry study partner at Davis");
+    const s = sid();
+    const question = "any study requests on the board?";
+    const first = await callTurn(s, question);
+    dropSession(s);
+    const second = await callTurn(s, "what about geometry?", Date.now(), {
+      history: [{ role: "user", text: question }, { role: "aqua", text: first.reply }], callerName: "Sam",
+    });
+    expect(second.callerName).toBe("Sam");
+    expect(second.cards.length).toBeGreaterThan(0);
+    expect(second.reply.toLowerCase()).toContain("geometry");
+  });
+
   it("is honest when nothing on the board matches", async () => {
     const s = sid();
     const t = await callTurn(s, "any news about the campus quidditch league?");

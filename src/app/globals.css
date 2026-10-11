@@ -265,6 +265,8 @@ body {
   -webkit-backdrop-filter: blur(24px) saturate(155%);
 }
 .glass-strong { background: linear-gradient(145deg, rgba(255,255,255,.95), rgba(255,255,255,.64) 65%, rgba(236,251,255,.78)); box-shadow: var(--shadow-lg); }
+/* Keep map labels from competing with text inside the floating controls. */
+.map-shell .glass-strong { background: linear-gradient(145deg, rgba(255,255,255,.97), rgba(247,253,255,.92) 65%, rgba(236,251,255,.94)); }
 .card { background: linear-gradient(145deg, rgba(255,255,255,.94), rgba(255,255,255,.66)); box-shadow: var(--shadow-sm); }
 [data-theme="dark"] .glass, [data-theme="dark"] .card { background: linear-gradient(145deg, rgba(37,71,89,.7), rgba(14,38,53,.72)); }
 [data-theme="dark"] .glass-strong { background: linear-gradient(145deg, rgba(30,62,81,.96), rgba(11,31,44,.92)); }

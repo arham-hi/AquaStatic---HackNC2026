@@ -1,6 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  outputFileTracingRoot: process.cwd(),
   // A second dev server must not overwrite the main server's generated chunks.
   distDir: process.env.AQUA_PREVIEW === "true" ? ".next-preview" : ".next",
   serverExternalPackages: ["postgres", "spectrum-ts"],

@@ -25,7 +25,7 @@ test("homepage loads the 3D map with demo markers and live counts", async ({ pag
 test("navigates major pages without errors", async ({ page }) => {
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(e.message));
-  for (const [path, heading] of [["/connect", "Connect"], ["/radio", "Aqua Static Radio"], ["/transit", "Bus"], ["/messages", "Messages"], ["/notifications", "Notifications"], ["/profile", "Profile"], ["/developer", "Demo & integrations"]]) {
+  for (const [path, heading] of [["/connect", "Connect"], ["/radio", "Aqua Static Radio"], ["/messages", "Messages"], ["/notifications", "Notifications"], ["/profile", "Profile"], ["/developer", "Demo & integrations"]]) {
     await page.goto(path);
     await expect(page.getByRole("heading", { level: 1, name: new RegExp(heading) })).toBeVisible();
   }
@@ -193,14 +193,18 @@ test("live call: Call Aqua greets, answers a typed turn, and restores the radio"
   expect(errors).toEqual([]);
 });
 
-test("transit page shows schedule data or a labeled demo overlay with the official tracker link", async ({ page }) => {
+test("old transit links open the live map's bus overlay with schedule data and the official tracker", async ({ page }) => {
   await page.goto("/transit");
-  await expect(page.getByText(/schedule data|DEMO overlay/).first()).toBeVisible({ timeout: 60000 });
+  await expect(page).toHaveURL(/\/\?buses=1/);
+  await expect(page.getByRole("complementary", { name: "Bus routes and stops" })).toBeVisible();
+  await expect(page.getByText(/schedule data|demo route geometry/i).first()).toBeVisible({ timeout: 60000 });
   await expect(page.getByRole("link", { name: /official tracker|mychtransit/i }).first()).toBeVisible();
   await expect(page.locator("canvas.maplibregl-canvas")).toBeVisible({ timeout: 30000 });
 });
 
-test("connect stream: filter to help, open a card, save it", async ({ page }) => {
+test("connect stream: filter to help, open a card, save it", async ({ page, request }) => {
+  await reset(request);
+  await switchDemo(page, "u_demo_maya");
   await page.goto("/connect");
   await page.getByRole("button", { name: "Help", exact: true }).click();
   const first = page.locator("article").first();

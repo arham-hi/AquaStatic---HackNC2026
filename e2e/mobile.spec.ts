@@ -3,7 +3,8 @@ import { test, expect } from "@playwright/test";
 test("mobile layout: bottom nav, map, no horizontal overflow, create dialog usable", async ({ page }) => {
   for (const path of ["/", "/discover", "/connect", "/radio", "/transit", "/messages", "/profile"]) {
     await page.goto(path);
-    await page.waitForLoadState("networkidle");
+    // Live polling and SSE intentionally keep network connections open.
+    await expect(page.getByRole("navigation", { name: "Primary" })).toBeVisible();
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth + 1);
     expect(overflow, `${path} overflows horizontally`).toBe(false);
   }

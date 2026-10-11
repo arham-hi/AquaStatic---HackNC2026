@@ -1,5 +1,5 @@
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
-import { getDb, schema } from "@/lib/db/client";
+import { getDb, schema, type DB } from "@/lib/db/client";
 import { newId } from "@/lib/ids";
 import { bump } from "@/lib/realtime";
 import type { NotificationType } from "@/lib/db/schema";
@@ -9,14 +9,13 @@ export type NotifyInput = {
 };
 
 /** Insert a notification unless the same (user, dedupeKey) already exists. */
-export async function notify(userId: string, n: NotifyInput): Promise<boolean> {
-  const db = getDb();
+export async function notify(userId: string, n: NotifyInput, db: Pick<DB, "insert"> = getDb()): Promise<boolean> {
   const res = (await db.insert(schema.notifications).values({
     id: newId("n"), userId, type: n.type, title: n.title, body: n.body, href: n.href ?? null,
     metadata: n.metadata ?? {}, dedupeKey: n.dedupeKey, readAt: null, createdAt: new Date(),
   }).onConflictDoNothing());
   const created = res.count > 0;
-  if (created) bump("notifications");
+  if (created && db === getDb()) bump("notifications");
   return created;
 }
 

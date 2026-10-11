@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
-import { RotateCcw, HeartHandshake } from "lucide-react";
+import { Bus, RotateCcw, HeartHandshake } from "lucide-react";
 import { useLive } from "@/hooks/useLive";
 import { useSession, useUI } from "@/components/shell/providers";
 import { TopBar } from "@/components/shell/topbar";
@@ -13,7 +13,9 @@ import { Bubbles } from "@/components/shell/bubbles";
 import { sharedTitle } from "@/components/feed/shared-tally";
 import { PostDetail } from "@/components/posts/post-detail";
 import { greeting } from "@/lib/time";
-import { getLocation } from "@/lib/locations";
+import { CAMPUS_CENTER, getLocation } from "@/lib/locations";
+import type { TransitStop } from "@/lib/services/transit";
+import { MapBusPanel, type MapTransitData } from "@/components/transit/map-bus-panel";
 import { cn, plural } from "@/lib/utils";
 import type { FeedItem } from "@/lib/services/feed";
 import type { MapHandle, ConnectionLine } from "./campus-map";
@@ -34,6 +36,29 @@ export function HomeMap() {
   const [selected, setSelected] = useState<FeedItem | null>(null);
   const knownMatches = useRef<Set<string> | null>(null);
   const [flash, setFlash] = useState<ConnectionLine[]>([]);
+  const [showBuses, setShowBuses] = useState(() => params.get("buses") === "1");
+  const [transitData, setTransitData] = useState<MapTransitData | null>(null);
+  const [selectedRouteId, setSelectedRouteId] = useState<string | null>(null);
+  const [busesEnabled, setBusesEnabled] = useState(true);
+  const [show3d, setShow3d] = useState(true);
+  const [focusedStop, setFocusedStop] = useState<TransitStop | null>(null);
+  const transit = useMemo(() => showBuses && transitData ? { routes: transitData.routes, stops: transitData.stops, selectedRouteId, busesEnabled } : null, [showBuses, transitData, selectedRouteId, busesEnabled]);
+
+  const resetBusView = () => {
+    setSelectedRouteId(null); setFocusedStop(null);
+    handle?.getMap()?.flyTo({ center: CAMPUS_CENTER, zoom: 13.6, pitch: 45, bearing: -15, duration: 900 });
+  };
+  const toggleBuses = () => {
+    setShowBuses((v) => !v);
+    setFocusedStop(null); setSelectedRouteId(null);
+  };
+  useEffect(() => { if (params.get("buses") === "1") setShowBuses(true); }, [params]);
+  const selectRoute = (id: string | null) => { setSelectedRouteId(id); setFocusedStop(null); setSelected(null); };
+  const selectStop = (stop: TransitStop) => {
+    setFocusedStop(stop); setSelected(null);
+    const map = handle?.getMap();
+    map?.flyTo({ center: [stop.lng, stop.lat], zoom: 16.5, pitch: Math.max(map.getPitch(), 50), offset: window.innerWidth >= 768 ? [-180, 0] : [0, -window.innerHeight * 0.23], duration: 900, essential: true });
+  };
 
   const markers = data.data?.markers ?? [];
   const live = data.data?.counts.live ?? null;
@@ -85,13 +110,13 @@ export function HomeMap() {
   const firstName = user ? user.displayName.replace(/ \(demo\)$/, "").split(" ")[0] : "Carolina";
 
   return (
-    <div className="relative h-dvh w-full overflow-hidden">
-      <CampusMap theme={theme} markers={markers} selectedId={selected?.id ?? null} onSelect={select} show3d transit={null} connections={connections} onReady={setHandle} className="absolute inset-0" />
+    <div className="map-shell relative h-dvh w-full overflow-hidden">
+      <CampusMap theme={theme} markers={markers} selectedId={selected?.id ?? null} onSelect={select} show3d={show3d} transit={transit} onRouteSelect={selectRoute} onStopSelect={selectStop} focusedStop={showBuses ? focusedStop : null} connections={connections} onReady={setHandle} className="absolute inset-0" />
       <TopBar overlay />
       <Bubbles className="hidden md:block" />
 
       {/* One line: who you are and how much is going on. */}
-      <div className="absolute left-3 md:left-4 top-[76px] md:top-[90px] glass-strong rounded-2xl px-5 py-4 animate-rise max-w-[calc(100vw-24px)]">
+      <div className={cn("absolute left-3 md:left-4 top-[76px] md:top-[90px] glass-strong rounded-2xl px-5 py-4 animate-rise", showBuses ? "hidden md:block md:max-w-[calc(100%_-_220px)]" : "max-w-[calc(100%_-_190px)] md:max-w-[calc(100%_-_220px)]")}>
         <div className="aero-eyebrow !mb-2">Your campus, in real time</div>
         <h1 className="text-lg font-semibold tracking-tight leading-tight">{greeting()}, {firstName}.</h1>
         <p className="text-xs text-fg-muted mt-0.5">
@@ -100,8 +125,13 @@ export function HomeMap() {
         </p>
       </div>
 
-      <button type="button" onClick={() => { handle?.reset(); setSelected(null); }} aria-label="Reset view" title="Reset view"
-        className="absolute right-3 md:right-4 bottom-24 md:bottom-6 grid size-10 place-items-center rounded-xl glass-strong text-fg-muted hover:text-fg [&_svg]:size-4">
+      <button type="button" onClick={toggleBuses} aria-pressed={showBuses} aria-expanded={showBuses} aria-controls="map-bus-panel" className={cn("absolute z-10 right-3 md:right-4 top-[82px] md:top-[94px] inline-flex h-11 items-center gap-2 rounded-full glass-strong px-4 text-sm font-semibold transition-colors", showBuses ? "text-carolina ring-1 ring-carolina/40" : "text-fg-muted hover:text-fg")}>
+        <Bus className="size-4" /> Buses <span aria-hidden className={cn("relative h-5 w-9 rounded-full transition-colors", showBuses ? "bg-carolina" : "bg-fg/20")}><span className={cn("absolute left-0 top-0.5 size-4 rounded-full bg-white shadow-sm transition-transform", showBuses ? "translate-x-[18px]" : "translate-x-0.5")} /></span>
+      </button>
+      {showBuses && <MapBusPanel selectedId={selectedRouteId} onSelect={selectRoute} onStop={selectStop} onData={setTransitData} onClose={toggleBuses} busesEnabled={busesEnabled} onToggleBuses={() => setBusesEnabled((v) => !v)} show3d={show3d} onToggle3d={() => setShow3d((v) => !v)} onReset={resetBusView} />}
+
+      <button type="button" onClick={() => { if (showBuses) resetBusView(); else handle?.reset(); setSelected(null); }} aria-label="Reset view" title="Reset view"
+        className={cn("absolute right-3 md:right-4 bottom-24 md:bottom-6 grid size-10 place-items-center rounded-xl glass-strong text-fg-muted hover:text-fg [&_svg]:size-4", showBuses && "hidden md:grid")}>
         <RotateCcw />
       </button>
 
