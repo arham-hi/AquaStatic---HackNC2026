@@ -1,138 +1,61 @@
-# Aqua Static — Your campus. In real time.
+# Aqua Static
 
-Aqua Static reimagines the connected, optimistic future that Frutiger Aero promised: a world where digital systems bring people closer together and make the physical places we share better.
+**Your campus. In real time.**
 
-A live, AI-powered coordination layer for UNC-Chapel Hill. Student updates, official campus feeds, transit and peer needs land on one **3D map of Chapel Hill**, get matched by a real **matching engine**, and are narrated by a personalized **AI radio station**. Built for HackNC 2026.
+Aqua Static is a live 3D map of UNC-Chapel Hill. Students post what they need or can offer in plain English (like "Need a USB-C laptop charger at Davis Library for the next hour"), an AI turns it into a structured post on the map, and a matching engine connects people nearby. An AI radio station narrates what's happening on campus, and real Chapel Hill Transit routes sit on the same map.
 
-Uses **Tiger Data PostgreSQL**, deterministic AI fallbacks, and five real public campus feeds. Gemini and voice API keys are optional.
+Built for HackNC 2026. The design is inspired by Frutiger Aero: glass, gloss, and an optimistic view of the internet.
 
 ## What it does
 
-| Pillar | What's inside |
-|---|---|
-| **Living campus map** | MapLibre GL + OpenFreeMap vector tiles, 3D building extrusions from OSM height data, category markers with entrance/pulse animation, filters, location search, match connection arcs, transit overlay, light/dark. |
-| **Campus intelligence** | Gemini (structured JSON, Zod-validated) parses messy student messages into type, category, item, location, time window, urgency. A deterministic parser covers the same ground with no key. |
-| **Community connections** | Requests and offers (borrow/lend, tutoring, study, lost & found, free food, rides). Explainable matching (item 40% · availability 25% · location 20% · keywords 15%), hard rejects, accept/decline, in-app chat, completion. |
-| **AI media studio** | Campus Flash, Campus Radio, Podcast Deep Dive, Text Digest and "Your Carolina Letter", generated only from stored records, stored as immutable snapshots. ElevenLabs voice or browser speech. |
-| **Transit** | Bus toggle on the live map: Chapel Hill Transit GTFS routes, searchable stops, schedule links, service notices, and clearly labeled simulated 3D buses. Official real-time tracker linked. |
-| **Assistant** | "What's happening near Davis?" → retrieval over our own data → grounded answer with sources. Drafts posts; never publishes without confirmation. |
-| **iMessage (Photon Spectrum)** | Worker process using the official `spectrum-ts` contract, sharing the same services and DB. One-time link codes. Local simulator when not connected. |
-| **Notifications, profiles, demo mode** | Deduplicated notification center, guest profiles with signed HttpOnly sessions, labeled demo accounts, a Demo Control Panel for judges. |
+- **Living campus map.** MapLibre GL with OpenFreeMap tiles, 3D buildings extruded from OpenStreetMap heights, category pins, filters, location search, and light/dark themes. Decorative 3D pedestrians walk the footpaths.
+- **Aqua Static Radio.** AI-written campus briefings built from stored records (official alerts, UNC events, community posts), voiced with ElevenLabs or browser speech.
+- **Ask Aqua Static.** A campus assistant that answers only from stored posts, cites its sources, and says when it doesn't know. It drafts posts but never publishes without confirmation.
+- **Transit.** Real Chapel Hill Transit schedule data (22 routes, about 520 stops) with a link to the official live tracker. We do not fake live buses.
+
+
+
+## AI usage
+
+### AI inside the product
+
+- **Google Gemini** 
+  - *Post parsing:* turns messy student messages into structured, validated posts. We use it because campus requests are informal and nobody wants to fill in a form.
+  - *Assistant:* answers questions from our own stored data only, with sources.
+  - *Radio scripts:* writes briefings from stored campus records.
+  - *Safety:* every Gemini response is validated with Zod, and locations are checked against a campus registry before anything is saved. If no key is set, a deterministic local parser takes over.
+- **ElevenLabs** voices the radio host. Browser speech synthesis is the fallback.
+- **Not AI:** the matching score is plain, explainable code.
+
+### AI used while building
+
+
+- **Claude (Anthropic) Devin, and Google Gemini** helped with:
+  - Frutiger Aero map styling and the brick 3D building layer 
+  - The walking pedestrians layer 
+  - Troubleshooting setup errors
+  - Integrating the bus routes into the app
+- Our team designed the product, made the decisions, and reviewed, tested, and integrated everything.
 
 ## Tech stack
 
-Next.js 15 (App Router) · React 19 · TypeScript strict · Tailwind v4 · Radix primitives · Lucide · Framer Motion · MapLibre GL + OpenFreeMap · PostgreSQL + Drizzle ORM (postgres.js) · Zod · Google Gemini (`@google/genai`) · ElevenLabs · Photon `spectrum-ts` · Vitest · Playwright.
+Next.js 15 (App Router), React 19, TypeScript, Tailwind CSS v4, Radix UI, Framer Motion, MapLibre GL, OpenFreeMap, Three.js with React Three Fiber, SQLite with Drizzle ORM, Zod, Google Gemini, ElevenLabs, Photon `spectrum-ts` (iMessage worker), Vitest, Playwright.
 
-## Quick start
+## Data sources and credits
 
-```bash
-npm install
-# Copy .env.example to .env and configure DATABASE_URL for Tiger Data first.
-npm run setup     # creates AUTH_SECRET, migrates PostgreSQL, seeds demos, ingests feeds, downloads GTFS
-npm run dev       # http://localhost:3000
-```
+- Map data: © OpenStreetMap contributors, tiles by OpenFreeMap
+- Transit: Chapel Hill Transit GTFS feed
+- Campus alerts and events: public UNC feeds
 
-That's it. Open two browsers, pick **Maya** in one and **Jordan** in the other (profile menu → Demo profiles), and follow `DEMO_GUIDE.md`.
+## Known limits
 
-### Setup details
+- Bus positions are not live. The app links to the official tracker.
+- Pedestrians on the map are decoration, not real people or live data.
+- Demo accounts and demo posts are for judging and are labeled DEMO.
 
-- `npm run setup` is idempotent. Flags: `-- --reset` wipes demo data first; `-- --seed-only` skips network fetches.
-- Database: Tiger Data PostgreSQL, configured through `DATABASE_URL`. Generate migrations with `npm run db:generate` and apply them with `npm run db:migrate`. PostgreSQL migrations live in `drizzle-pg/`; `drizzle/` retains the old SQLite history.
-- To preserve existing SQLite records, follow [the transfer guide](docs/tiger-data-migration.md). Do not run setup or a demo reset during migration.
-- Demo mode is **on** in development by default and **off** in production unless `DEMO_MODE=true`.
+## Team
 
-## Environment variables
-
-Copy `.env.example` to `.env`. A PostgreSQL connection is required; AI and voice keys are optional.
-
-| Variable | Purpose | Without it |
-|---|---|---|
-| `DATABASE_URL` | PostgreSQL connection URL with database credentials and SSL | required |
-| `TIGER_DATABASE_URL` | Connection checks and SQLite transfer destination | optional after transfer |
-| `SQLITE_DATABASE_URL` | Original SQLite source for the one-time transfer | `file:./data/aqua.db` |
-| `TEST_DATABASE_URL` | PostgreSQL server for isolated test schemas | uses `TIGER_DATABASE_URL` |
-| `AUTH_SECRET` | HMAC key for signed sessions. **Required in production.** | generated by setup; dev fallback otherwise |
-| `DEMO_MODE` | Enables demo accounts, `/developer`, `/api/demo/*` | on in dev, off in prod |
-| `APP_BASE_URL` | Base URL for deep links sent over iMessage | `http://localhost:3000` |
-| `GEMINI_API_KEY`, `GEMINI_MODEL` | Gemini structured parsing, assistant, scripts | deterministic local parser & templates |
-| `ELEVENLABS_API_KEY`, `ELEVENLABS_VOICE_ID`, `ELEVENLABS_VOICE_ID_2` | Studio voice for Radio | browser speech synthesis |
-| `SPECTRUM_PROJECT_ID`, `SPECTRUM_PROJECT_SECRET` | Photon Spectrum credentials (exact names the SDK reads) | "Photon not connected"; web app unaffected |
-| `CRON_SECRET` | Bearer token for `/api/sources/refresh`, `/api/transit/refresh`, `/api/integrations/probe` | those routes are open only in demo mode |
-| `TRANSIT_GTFS_URL` | Chapel Hill Transit GTFS zip | verified default |
-| `DATA_DIR` | Writable directory for audio and GTFS caches | `data/` locally; temporary storage on Vercel |
-| `RADIO_VOICE` | `auto` for ElevenLabs when budget allows, or `browser` | `auto` |
-| `ELEVENLABS_RESERVE_CHARS` | Characters to leave unused by the station/call voice | `3000`; `0` is allowed |
-
-### Adding Gemini
-Set `GEMINI_API_KEY` (and optionally `GEMINI_MODEL`, default `gemini-3.8-flash`). Restart. The `/developer` page's "Run live probe" validates the key. Parsing, assistant answers, event classification and briefing scripts switch to Gemini automatically; every output is validated with Zod and locations are checked against the campus registry before anything is saved.
-
-### Adding ElevenLabs
-Set `ELEVENLABS_API_KEY` (and a `ELEVENLABS_VOICE_ID`). Radio requests `/api/briefings/:id/audio`, which synthesizes once and caches the MP3 under `data/audio/`. Without a key the route returns 503 and the player uses the browser voice.
-
-### Configuring and starting Photon (iMessage)
-1. Create a project at https://app.photon.codes and copy the project id/secret into `.env` as `SPECTRUM_PROJECT_ID` / `SPECTRUM_PROJECT_SECRET`.
-2. `npm run worker:photon` starts the long-running agent (`worker/photon.ts`). It uses `Spectrum({ projectId, projectSecret, providers: [imessage.config()] })` and the `for await (const [space, message] of app.messages)` loop from the official docs, and calls the same `handleChannelMessage()` the web simulator uses.
-3. Link a phone: Profile → "Link iMessage" → text `LINK 123456` to the line. Codes expire in 10 minutes and are single-use.
-4. Then text things like "What's happening near Davis?" or "I need a charger at the UL" (the agent drafts and asks for YES before posting).
-
-Without credentials nothing breaks: `/developer` shows "Photon not connected" and includes a simulator that runs the identical handler.
-
-## Public source ingestion
-
-Adapters in `src/lib/sources/adapters.ts`, orchestration in `src/lib/services/sources.ts`. Only these allowlisted URLs are ever fetched (no generic fetch endpoint):
-
-| Source | Adapter | Kind |
-|---|---|---|
-| UNC Events Calendar (`calendar.unc.edu/api/2/events`) | Localist JSON | events |
-| Heel Life (`heellife.unc.edu/api/discovery/event/search`) | CampusLabs Engage JSON | events |
-| UNC News RSS | RSS | news |
-| The Daily Tar Heel RSS | RSS | news |
-| Alert Carolina RSS | RSS | official alerts |
-
-Each refresh: 12s timeout, dedupe by canonical URL, timestamp normalization, location resolution (venue name → registry, or coordinates snapped within 120 m), source attribution, last-fetched/last-error bookkeeping. Items are summaries + links; full articles are never stored. Refresh happens lazily when data is older than 15 minutes, from the Discover "Refresh feeds" button, or via `POST /api/sources/refresh` with `Authorization: Bearer $CRON_SECRET` for a scheduler.
-
-## Aqua FM music bed
-
-The radio station's background music in `public/music/` is synthesized in-house by `scripts/make-music.mjs` — no third-party audio. Track credits and license notes are in [`docs/MUSIC_CREDITS.md`](docs/MUSIC_CREDITS.md).
-
-## Transit data
-
-`src/lib/services/transit.ts` downloads the Chapel Hill Transit GTFS zip, parses `routes/stops/trips/shapes/stop_times`, builds per-route GeoJSON and stop lists, and caches the result for 24h. The live map's Buses toggle adds routes and simulated vehicles while preserving the blue buildings and camera. Vehicles are labeled **simulated**, not real-time tracking. The panel links to the official tracker. If the download fails, a labeled DEMO overlay with approximate geometry is used instead. Old `/transit` links redirect to `/?buses=1`.
-
-## Tests
-
-```bash
-npm run typecheck   # tsc --noEmit
-npm run lint        # eslint
-npm test            # vitest: parser, matching, services (posts/matches/messages/notifications/briefings/assistant), sources, GTFS, markers
-npm run test:voice # mocked live-call browser regression checks; requires Chrome
-npm run build       # production build (must pass before e2e)
-npm run test:e2e    # playwright: homepage/map, navigation, two-user request→offer→match→chat→complete, assistant, radio, transit, discover, mobile
-```
-
-E2E runs on port 3100 against an isolated PostgreSQL schema, configured by `TEST_DATABASE_URL` or `TIGER_DATABASE_URL`. It reuses a production build in `.next-preview` (built with `AQUA_PREVIEW=true`) or falls back to a separate dev server. Set `PLAYWRIGHT_BROWSER_CHANNEL=chrome` to use installed Chrome instead of Playwright's bundled Chromium. Tests never reset public application data.
-
-## Deployment
-
-Use Node 24 and a reachable Tiger Data PostgreSQL service. Set `DATABASE_URL`, `AUTH_SECRET`, `APP_BASE_URL` and `DEMO_MODE=false` (or `true` for a judged demo), then run `npm ci && npm run db:migrate && npm run build && npm start`. Run setup only when intentionally seeding demo data. The Photon worker runs as a second process with the same database settings.
-
-Database records are shared through PostgreSQL. On Vercel, audio and GTFS caches default to writable temporary storage; these files are ephemeral and can be regenerated. Live calls carry recent context in each request, so conversation continuity does not require the same server instance and transcripts are not persisted to the database. If Gemini is unavailable, live calls display an availability notice instead of speaking a canned reply. Other AI features retain their labeled local fallbacks. SSE notifications, channel drafts and rate limits remain process-local; account for those separately when deploying multiple instances or a serverless host.
-
-## Project layout
-
-```
-src/app/            pages (App Router) + api/ route handlers
-src/components/     shell, map, posts, feed, connect, radio, transit, messages, notifications, profile, developer, ui
-src/lib/db/         schema.ts (PostgreSQL), client.ts (pooled connections)
-src/lib/services/   posts, matching, connections, notifications, feed, sources, transit, briefings, assistant, users, demo, channels, integrations
-src/lib/ai/         gemini.ts (structured output), fallback.ts (deterministic parser), index.ts (provider switch)
-src/lib/sources/    feed adapters (Localist, Engage, RSS)
-src/lib/            locations.ts (campus registry), session.ts (signed cookies), realtime.ts (SSE bus), time.ts, rate-limit.ts
-worker/photon.ts    iMessage agent process
-scripts/            setup.ts, e2e-server.mjs, copy-maplibre-worker.mjs
-tests/, e2e/        vitest + playwright
-```
-
-## Trust labels
-
-Every item carries a visible label: **Official source** (ingested from an allowlisted feed, linked to the original), **Community report** (student-submitted, unverified) or **DEMO** (simulated for demonstration). Community reports are never presented as official safety alerts; the UI links to Alert Carolina for emergencies.
+Arhem Hussain Inamdar
+Aadee Chheda
+Arya Pathare
+Nia Spence
