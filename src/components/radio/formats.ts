@@ -20,6 +20,7 @@ export const FORMATS: Record<BriefingFormat, { label: string; blurb: string; ico
   podcast: { label: "Podcast Deep Dive", blurb: "3–5 min on one topic", icon: Mic, text: false, topic: true },
   digest: { label: "Text Digest", blurb: "Skimmable sections", icon: Newspaper, text: true },
   letter: { label: "Carolina Letter", blurb: "A note from campus", icon: Mail, text: true },
+  station: { label: "Station segment", blurb: "Live on Aqua FM", icon: Radio, text: false },
 };
 
 export const WPM = 150;

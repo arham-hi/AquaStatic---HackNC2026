@@ -1,7 +1,7 @@
-import { RadioPage } from "@/components/radio/radio-page";
+import { StationPage } from "@/components/radio/station-page";
 
 export const metadata = { title: "Radio" };
 
 export default function Radio() {
-  return <RadioPage />;
+  return <StationPage />;
 }

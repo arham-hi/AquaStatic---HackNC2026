@@ -28,6 +28,9 @@ export const env = {
   photon: { projectId: process.env.SPECTRUM_PROJECT_ID || "", projectSecret: process.env.SPECTRUM_PROJECT_SECRET || "" },
   cronSecret: process.env.CRON_SECRET || "",
   transitGtfsUrl: process.env.TRANSIT_GTFS_URL || "https://mychtransit.org/gtfs",
+  // Radio station voice policy: "auto" uses ElevenLabs while budget allows, "browser" never calls it.
+  radioVoice: process.env.RADIO_VOICE === "browser" ? "browser" : "auto",
+  elevenlabsReserve: Math.max(0, Number(process.env.ELEVENLABS_RESERVE_CHARS) || 3000),
 };
 
 export const hasGemini = () => !!env.gemini.apiKey;

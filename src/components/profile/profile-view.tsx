@@ -1,9 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
-import { Moon, ShieldCheck, Smartphone, Sun, UserRound, X } from "lucide-react";
+import { Moon, ShieldCheck, Sun, UserRound, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, Badge, Card, Chip, EmptyState, Input, Label, Skeleton, Switch } from "@/components/ui/primitives";
 import { LocationPicker } from "@/components/posts/location-picker";
@@ -38,7 +38,6 @@ export function ProfileView() {
       </div>
       <div className="space-y-4">
         <PrivacyCard />
-        <LinkIMessageCard />
         {demoMode && <DemoProfilesCard />}
       </div>
     </div>
@@ -162,33 +161,6 @@ function PrivacyCard() {
         <div className="text-xs font-semibold uppercase tracking-wide text-fg-faint mb-1">Never shared</div>
         <ul className="list-disc pl-5 text-fg-muted space-y-0.5"><li>Precise or live location</li><li>Phone number or iMessage handle</li><li>Email address</li></ul>
       </div>
-    </Card>
-  );
-}
-
-function LinkIMessageCard() {
-  const [code, setCode] = useState<{ code: string; expiresAt: number; instructions: string } | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [now, setNow] = useState(Date.now());
-  useEffect(() => { if (!code) return; const t = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(t); }, [code]);
-  const left = code ? Math.max(0, Math.floor((code.expiresAt - now) / 1000)) : 0;
-  const mmss = `${Math.floor(left / 60)}:${String(left % 60).padStart(2, "0")}`;
-
-  return (
-    <Card className="space-y-3">
-      <div className="flex items-center gap-2 font-semibold text-sm"><Smartphone className="size-4 text-carolina" /> Link iMessage (Photon)</div>
-      <p className="text-sm text-fg-muted">Text Aqua Static from your phone to post and ask questions. Only works while the Photon worker is running.</p>
-      {code && left > 0 ? (
-        <div className="rounded-xl bg-carolina-soft/50 p-3 text-center space-y-1">
-          <div className="font-mono text-2xl font-semibold tracking-[0.3em]">{code.code}</div>
-          <div className="text-xs text-fg-muted">Expires in {mmss}</div>
-          <p className="text-sm">{code.instructions}</p>
-        </div>
-      ) : (
-        <Button variant="secondary" loading={busy} onClick={async () => { setBusy(true); try { setCode(await api.post("/api/link-codes")); setNow(Date.now()); } catch (e) { toast.error((e as Error).message); } finally { setBusy(false); } }}>
-          {code ? "Get a new code" : "Generate link code"}
-        </Button>
-      )}
     </Card>
   );
 }

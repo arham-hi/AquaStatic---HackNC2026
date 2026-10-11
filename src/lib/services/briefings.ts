@@ -15,14 +15,14 @@ export { INTERESTS, INTEREST_LABELS } from "@/lib/constants";
 import { INTERESTS } from "@/lib/constants";
 
 export const GenerateBriefingSchema = z.object({
-  format: z.enum(BRIEFING_FORMATS).default("radio"),
+  format: z.enum(BRIEFING_FORMATS).default("radio").refine((f) => f !== "station", "Station segments are created by the station service, not this endpoint"),
   length: z.enum(["short", "medium", "long"]).default("medium"),
   interests: z.array(z.enum(INTERESTS)).max(9).default([]),
   topic: z.string().max(80).optional(),
 });
 export type GenerateBriefingInput = z.infer<typeof GenerateBriefingSchema>;
 
-const FORMAT_TITLES: Record<BriefingFormat, string> = { flash: "Campus Flash", radio: "Aqua Static Radio", podcast: "Deep Dive", digest: "Text Digest", letter: "Your Carolina Letter" };
+const FORMAT_TITLES: Record<BriefingFormat, string> = { flash: "Campus Flash", radio: "Aqua Static Radio", podcast: "Deep Dive", digest: "Text Digest", letter: "Your Carolina Letter", station: "Aqua FM" };
 
 function matchesInterest(it: FeedItem, interests: string[]): boolean {
   if (!interests.length) return true;
