@@ -1,4 +1,5 @@
 import { and, desc, eq, gt, inArray, isNull, lte, ne, or, sql } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import { z } from "zod";
 import { getDb, schema } from "@/lib/db/client";
 import { newId } from "@/lib/ids";
@@ -198,6 +199,36 @@ export async function sharedBreakdown(): Promise<SharedBreakdown> {
 
 export const sharedCount = async () => (await sharedBreakdown()).total;
 
+/** AquaImpact: what the community board has actually done. Only counts COMPLETED matches —
+ *  an open offer or an accepted-but-unfinished match is never counted as an exchange. */
+export type ImpactStats = {
+  completed: number;        // exchanges marked complete by a participant
+  resolvedRequests: number; // request posts that reached "fulfilled"
+  peopleHelped: number;     // distinct request authors in completed matches
+  demoCompleted: number;    // completed exchanges where a side was demo content (shown separately)
+  breakdown: SharedBreakdown;
+};
+
+export async function impactStats(): Promise<ImpactStats> {
+  const db = getDb();
+  const req = alias(schema.posts, "impact_req");
+  const off = alias(schema.posts, "impact_off");
+  const rows = (await db.select({ requester: req.authorId, reqDemo: req.isDemo, offDemo: off.isDemo })
+    .from(schema.matches)
+    .innerJoin(req, eq(req.id, schema.matches.requestPostId))
+    .innerJoin(off, eq(off.id, schema.matches.offerPostId))
+    .where(eq(schema.matches.status, "completed")));
+  const fulfilled = (await db.select({ c: sql<number>`count(*)::int` }).from(schema.posts)
+    .where(and(eq(schema.posts.type, "request"), inArray(schema.posts.status, ["fulfilled", "resolved"]))))[0]?.c ?? 0;
+  return {
+    completed: rows.length,
+    resolvedRequests: fulfilled,
+    peopleHelped: new Set(rows.map((r) => r.requester).filter((x): x is string => !!x)).size,
+    demoCompleted: rows.filter((r) => r.reqDemo || r.offDemo).length,
+    breakdown: (await sharedBreakdown()),
+  };
+}
+
 /** Human sentence for the tally, e.g. "4 borrowed · 2 rehomed · 1 ride shared". Empty when nothing yet. */
 export function sharedSummary(b: SharedBreakdown): string {
   const parts = [
@@ -213,6 +244,7 @@ export async function activityCounts(now = Date.now()) {
   return {
     shared: (await sharedCount()),
     sharedBreakdown: (await sharedBreakdown()),
+    impact: (await impactStats()),
     live: live.length,
     requests: live.filter((p) => p.type === "request").length,
     offers: live.filter((p) => p.type === "offer").length,

@@ -14,10 +14,9 @@ const FALLBACK = ["minor", "service"]; // used only if the map has too few footp
 
 type Line = { pts: [number, number][]; cum: number[]; length: number; offset: number };
 
-const SHIRTS = ["#4aa3df", "#6fcf6f", "#ffb347", "#ff7aa2", "#b79cff", "#ffd84d", "#5ee0d0", "#ff6b6b"];
-const PANTS = ["#3b4a66", "#6b5a4a", "#2f3b52", "#8a7f72"];
-const SKINS = ["#f1c9a5", "#e0ac82", "#c68a62", "#8d5a3b", "#f6d8bf"];
-const HAIRS = ["#2b1d14", "#5a3a22", "#c58b3a", "#16120f", "#8a3b2a"];
+// Frutiger Aero cast: glossy translucent gummy people in aqua / lime / turquoise / lavender.
+// One color per walker — the whole body shares it, like a jelly-bean mascot.
+const AERO = ["#38c8e8", "#7ee0d2", "#9be34d", "#c9a8ff", "#5aa7f0", "#8ef0b0", "#ffc8e8", "#ffe066"];
 
 function rng(seed: number) {
   return () => { seed |= 0; seed = (seed + 0x6d2b79f5) | 0; let t = Math.imul(seed ^ (seed >>> 15), 1 | seed); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
@@ -73,16 +72,23 @@ function createWalkersLayer(lines: Line[], origin: maplibregl.MercatorCoordinate
     .multiply(new THREE.Matrix4().makeScale(units, -units, units))
     .multiply(new THREE.Matrix4().makeRotationX(Math.PI / 2));
 
-  // Shared geometry (a person is a few simple shapes). Pivots sit at the hip/shoulder so limbs can swing.
+  // Shared geometry — smooth rounded capsules/spheres, nothing angular. Pivots sit at the hip/shoulder so limbs can swing.
   const geo = {
-    torso: new THREE.CylinderGeometry(0.22, 0.26, 0.62, 10),
-    head: new THREE.SphereGeometry(0.24, 12, 10),
-    hair: new THREE.SphereGeometry(0.25, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2),
-    leg: new THREE.CylinderGeometry(0.09, 0.08, 0.8, 8).translate(0, -0.4, 0),
-    arm: new THREE.CylinderGeometry(0.06, 0.05, 0.56, 8).translate(0, -0.28, 0),
+    torso: new THREE.CapsuleGeometry(0.24, 0.42, 6, 14),
+    head: new THREE.SphereGeometry(0.3, 16, 12),
+    leg: new THREE.CapsuleGeometry(0.085, 0.58, 4, 10).translate(0, -0.35, 0),
+    arm: new THREE.CapsuleGeometry(0.06, 0.4, 4, 10).translate(0, -0.24, 0),
   };
-  const mats = new Map<string, THREE.MeshLambertMaterial>();
-  const mat = (c: string) => { let m = mats.get(c); if (!m) { m = new THREE.MeshLambertMaterial({ color: c, flatShading: true }); mats.set(c, m); } return m; };
+  // Pearlescent gummy material: slightly translucent, high gloss, a rim of white sheen.
+  const mats = new Map<string, THREE.MeshPhysicalMaterial>();
+  const mat = (c: string) => {
+    let m = mats.get(c);
+    if (!m) {
+      m = new THREE.MeshPhysicalMaterial({ color: c, transparent: true, opacity: 0.82, roughness: 0.18, metalness: 0, clearcoat: 1, clearcoatRoughness: 0.25, sheen: 0.6, sheenColor: new THREE.Color("#e8fbff"), emissive: c, emissiveIntensity: 0.12 });
+      mats.set(c, m);
+    }
+    return m;
+  };
   const mesh = (g: THREE.BufferGeometry, m: THREE.Material, x: number, y: number, z: number, parent: THREE.Object3D) => {
     const o = new THREE.Mesh(g, m); o.position.set(x, y, z); parent.add(o); return o;
   };
@@ -94,12 +100,11 @@ function createWalkersLayer(lines: Line[], origin: maplibregl.MercatorCoordinate
 
   const walkers = Array.from({ length: COUNT }, () => {
     const g = new THREE.Group();
-    const shirt = mat(pick(SHIRTS)), pants = mat(pick(PANTS)), skin = mat(pick(SKINS));
-    mesh(geo.torso, shirt, 0, 1.15, 0, g);
-    mesh(geo.head, skin, 0, 1.64, 0, g);
-    mesh(geo.hair, mat(pick(HAIRS)), 0, 1.68, 0, g);
-    const legs = [-0.11, 0.11].map((x) => { const p = new THREE.Group(); p.position.set(x, 0.84, 0); g.add(p); mesh(geo.leg, pants, 0, 0, 0, p); return p; });
-    const arms = [-0.3, 0.3].map((x) => { const p = new THREE.Group(); p.position.set(x, 1.4, 0); g.add(p); mesh(geo.arm, shirt, 0, 0, 0, p); return p; });
+    const body = mat(pick(AERO));
+    mesh(geo.torso, body, 0, 1.15, 0, g);
+    mesh(geo.head, body, 0, 1.66, 0, g);
+    const legs = [-0.11, 0.11].map((x) => { const p = new THREE.Group(); p.position.set(x, 0.84, 0); g.add(p); mesh(geo.leg, body, 0, 0, 0, p); return p; });
+    const arms = [-0.3, 0.3].map((x) => { const p = new THREE.Group(); p.position.set(x, 1.4, 0); g.add(p); mesh(geo.arm, body, 0, 0, 0, p); return p; });
     scene.add(g);
     const line = chooseLine();
     return { g, legs, arms, line, dist: rand() * line.length, dir: rand() < 0.5 ? 1 : -1, speed: 1.1 + rand() * 0.7, phase: rand() * 6, heading: 0 };
@@ -122,9 +127,9 @@ function createWalkersLayer(lines: Line[], origin: maplibregl.MercatorCoordinate
       const dt = reducedMotion ? 0 : Math.min((now - previous) / 1000, 0.1);
       previous = now;
       const zoom = map.getZoom();
-      const show = zoom >= 14.8;
+      const show = zoom >= 14.4;
       // Same exaggeration idea as the 3D buses: people stay visible when zoomed out.
-      const scale = 4.5 * Math.min(12, Math.max(1, 2 ** (16.5 - zoom)));
+      const scale = 7 * Math.min(12, Math.max(1, 2 ** (16.2 - zoom)));
       for (const w of walkers) {
         w.g.visible = show;
         if (!show) continue;

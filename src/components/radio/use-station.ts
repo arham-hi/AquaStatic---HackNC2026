@@ -41,7 +41,11 @@ export const KIND_LABEL: Record<StationKind, string> = {
   welcome: "Sign on",
 };
 
-const TRACKS = ["/music/aqua-drift.wav", "/music/static-tide.wav"];
+// All tracks are synthesized locally by scripts/make-music.mjs — fully self-owned, no licensing risk.
+const TRACKS = ["/music/aqua-drift.wav", "/music/static-tide.wav", "/music/carolina-gliss.wav"];
+// Short stingers, also synthesized locally. They mark semantic transitions (sign-on, a news block,
+// a completed match, back-to-music) — never played mid-sentence or under speech.
+const SFX = { signOn: "/music/sfx-sign-on.wav", news: "/music/sfx-news.wav", match: "/music/sfx-match.wav", outro: "/music/sfx-outro.wav" } as const;
 const MUSIC_LEVEL = 0.55;
 const DUCK_LEVEL = 0.12;
 const RAMP = 0.4;
@@ -57,6 +61,21 @@ const FRESH_SEGMENT_MS = 4 * 60 * 1000;
 
 const hasTts = () => typeof window !== "undefined" && "speechSynthesis" in window && "SpeechSynthesisUtterance" in window;
 const sentences = (t: string) => t.split(/(?<=[.!?…])\s+/).map((s) => s.trim()).filter(Boolean);
+const MATCHY = /found|matched|resolved|picked up|thanks|won|free food|kept in use/i;
+
+/** A short station sting. Resolves when done (or after a cap) so callers can sequence speech after it. */
+function playSfx(url: string, volume = 0.5): Promise<void> {
+  return new Promise((resolve) => {
+    const a = new Audio(url);
+    a.volume = volume;
+    let done = false;
+    const finish = () => { if (!done) { done = true; clearTimeout(t); resolve(); } };
+    const t = setTimeout(finish, 2800);
+    a.onended = finish;
+    a.onerror = finish;
+    void a.play().catch(finish);
+  });
+}
 
 function pickVoice(): SpeechSynthesisVoice | null {
   const en = window.speechSynthesis.getVoices().filter((v) => v.lang.toLowerCase().startsWith("en"));
@@ -91,6 +110,7 @@ export function useStation() {
   const genRef = useRef(0);
   const pumpingRef = useRef(false);
   const cancelPlaybackRef = useRef<(() => void) | null>(null);
+  const spokeRef = useRef(false); // a segment played this pump run — queue draining earns the outro sting
   const tunedRef = useRef(false);
   const suspendedRef = useRef(false); // a live call parked the station — pump waits, queue preserved
   const currentRef = useRef<StationSegment | null>(null);
@@ -243,12 +263,24 @@ export function useStation() {
         if (suspendedRef.current) { setCurrent(null); currentRef.current = null; setSpeaking(false); return; }
         const seg = queueRef.current.shift();
         setQueueLength(queueRef.current.length);
-        if (!seg) { setCurrent(null); currentRef.current = null; setSpeaking(false); duckMusic(false); return; }
+        if (!seg) {
+          setCurrent(null); currentRef.current = null; setSpeaking(false);
+          if (spokeRef.current) { spokeRef.current = false; void playSfx(SFX.outro, mutedRef.current ? 0 : 0.45); }
+          duckMusic(false);
+          return;
+        }
         setCurrent(seg);
         currentRef.current = seg;
         setSpeaking(true);
         duckMusic(true);
-        if (seg.kind !== "alert" && seg.kind !== "time_check") emitFx(/found|matched|resolved|picked up|thanks|won|free food/i.test(seg.text) ? "celebrate" : "bounce");
+        const matchy = MATCHY.test(seg.text);
+        if (seg.kind !== "alert" && seg.kind !== "time_check") emitFx(matchy ? "celebrate" : "bounce");
+        // Sting before spoken segments — alerts go straight to voice (no jingle under serious news).
+        if (seg.kind !== "alert" && seg.kind !== "time_check" && seg.kind !== "welcome" && !mutedRef.current) {
+          await playSfx(matchy ? SFX.match : SFX.news);
+          if (suspendedRef.current || !tunedRef.current) return;
+        }
+        spokeRef.current = true;
         let ok = false;
         if (seg.audioProvider === "elevenlabs") ok = await playMp3(seg);
         if (suspendedRef.current || !tunedRef.current) return;
@@ -360,6 +392,7 @@ export function useStation() {
     setTimeout(() => setTuning(false), 1400);
     emitFx("bounce");
     seenRef.current.add(WELCOME.id);
+    if (!mutedRef.current) await playSfx(SFX.signOn, 0.55); // classic sign-on: jingle first, then the greeting
     enqueue([WELCOME]);
     // Right behind the welcome: the freshest real segment (a server plan runs inside this GET too).
     void api.get<StationResponse>(`/api/station?after=${lastIdRef.current ?? ""}`)

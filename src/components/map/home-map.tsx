@@ -22,7 +22,7 @@ import type { MapHandle, ConnectionLine } from "./campus-map";
 
 const CampusMap = dynamic(() => import("./campus-map").then((m) => m.CampusMap), { ssr: false, loading: () => <div className="absolute inset-0 grid place-items-center bg-bg"><div className="text-sm text-fg-muted animate-pulse">Loading Chapel Hill…</div></div> });
 
-type MarkersResponse = { markers: FeedItem[]; counts: { live: number; requests: number; offers: number; alerts: number; last24h: number; shared: number; sharedBreakdown: { borrowed: number; rehomed: number; returned: number; rides: number; food: number } } };
+type MarkersResponse = { markers: FeedItem[]; counts: { live: number; requests: number; offers: number; alerts: number; last24h: number; shared: number; sharedBreakdown: { total: number; borrowed: number; rehomed: number; returned: number; rides: number; food: number } } };
 type RecentMatch = { id: string; status: string; createdAt: string; request: { id: string; locationId: string | null; title: string }; offer: { id: string; locationId: string | null; title: string } };
 
 export function HomeMap() {

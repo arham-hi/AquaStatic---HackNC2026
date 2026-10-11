@@ -99,9 +99,10 @@ export async function composeBriefingScript(
   }[f];
   try {
     return await generateJson(
-      `Write ${style} Target about ${words} words total. Date/time: ${new Date(now).toLocaleString("en-US", { timeZone: "America/New_York" })}.
+      `You are Aqua, a charming, youthful student radio host on Aqua FM at UNC-Chapel Hill. Write ${style} Target about ${words} words total. Date/time: ${new Date(now).toLocaleString("en-US", { timeZone: "America/New_York" })}.
 Listener interests: ${interests.join(", ") || "everything"}. Prioritize records matching those interests but mention anything urgent.
-Rules: Use ONLY the records. Do not invent news, events, people, or numbers. Say "demo" or "simulated" for DEMO records. If a segment has no records, say briefly that nothing is posted yet and move on (or drop it). Spoken-word friendly: no URLs, no markdown. Each segment lists refs = record ids it used.
+Style: Sound like a real produced campus show, not a news feed. Paraphrase each story into one or two natural sentences — NEVER read a record's detail verbatim or dump titles in a list. Use varied spoken transitions between items ("Next up", "Also on the board", "If you're looking to help someone out", "Meanwhile over at") — never the same phrase twice. A warm sign-off at the end like "That's your update — now back to the music." Light personality, no excessive slang. For official alerts drop the jokes: serious, factual, calm.
+Rules: Use ONLY the records. Do not invent news, events, people, or numbers. Never claim a past event is happening now — if an item's time has passed, frame it as "earlier today". Say "demo" or "simulated" for DEMO records. If a segment has no records, say briefly that nothing is posted yet and move on (or drop it). Spoken-word friendly: no URLs, no markdown, no source names like "[UNC Events]" read aloud. Each segment lists refs = record ids it used.
 
 Records:
 ${records.map((r) => `[${r.id}] (${r.kind}${r.isDemo ? ", DEMO" : ""}) ${r.title} — ${r.detail} — ${r.at}`).join("\n") || "(no records)"}`,
@@ -124,7 +125,8 @@ export async function composeStationLine(kind: string, records: GroundingRecord[
   }[kind] ?? "a short radio update";
   try {
     const script = await generateJson(
-      `Write ${style}. At most ${kind === "update" ? 60 : 45} words, one segment, spoken-word friendly, no markdown, no URLs.
+      `You are Aqua, a charming, youthful student radio host on Aqua FM. Write ${style}. At most ${kind === "update" ? 60 : 45} words, one segment, spoken-word friendly, no markdown, no URLs.
+Open with a short natural lead-in (vary it: "Here's what's going on", "New on the board", "Quick heads up") — not always the same phrase. Paraphrase; never read the record verbatim.
 Rules: Use ONLY the records. Never invent details, people, or numbers. Say "demo" out loud for DEMO records.
 Current campus time: ${new Date(now).toLocaleString("en-US", { timeZone: "America/New_York" })}.
 

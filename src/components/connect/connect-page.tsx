@@ -16,7 +16,7 @@ import { FeedCard, FeedSkeleton, type FeedItemWithSaved } from "@/components/fee
 import { PostDetail } from "@/components/posts/post-detail";
 import { ConversationThread } from "@/components/messages/conversation-thread";
 import { getLocation } from "@/lib/locations";
-import { SharedTally } from "@/components/feed/shared-tally";
+import { AquaImpact } from "@/components/feed/aqua-impact";
 import { timeAgo } from "@/lib/time";
 import { cn } from "@/lib/utils";
 import type { MatchView } from "@/lib/services/connections";
@@ -70,7 +70,7 @@ export function ConnectPage() {
     <Page title="Connect" subtitle="What's happening, who needs a hand, and who can help."
       actions={<><Button variant="secondary" onClick={() => openCreate("I have ")}><Gift /> Offer help</Button><Button onClick={() => openCreate("I need ")}><HandHelping /> Request help</Button></>}>
       <div className="mx-auto max-w-2xl space-y-6">
-        <SharedTally />
+        <AquaImpact />
         {mine.length > 0 && (
           <section className="space-y-3">
             <h2 className="text-sm font-semibold text-fg-muted">Your matches</h2>

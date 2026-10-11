@@ -48,7 +48,7 @@ describe("station planner", () => {
     const seg = await planNextSegment();
     expect(seg).not.toBeNull();
     expect(kindOf(seg!)).toBe("time_check");
-    expect(seg!.script).toMatch(/listening to Aqua Static/);
+    expect(seg!.script).toMatch(/listening to Aqua FM/);
     expect(seg!.audioProvider).toBe("browser");
   });
 
@@ -103,7 +103,7 @@ describe("station planner", () => {
     expect(seg).not.toBeNull();
     expect(kindOf(seg!)).toBe("time_check");
     expect(seg!.audioProvider).toBe("browser");
-    expect(seg!.script).toMatch(/listening to Aqua Static/i);
+    expect(seg!.script).toMatch(/listening to Aqua FM/i);
   });
 
   it("returns only new segments after a cursor", async () => {

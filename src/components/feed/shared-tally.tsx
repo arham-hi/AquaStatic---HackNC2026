@@ -5,7 +5,7 @@
 import { Leaf } from "lucide-react";
 import { useLive } from "@/hooks/useLive";
 
-type Breakdown = { borrowed: number; rehomed: number; returned: number; rides: number; food: number };
+export type Breakdown = { total: number; borrowed: number; rehomed: number; returned: number; rides: number; food: number };
 type Sync = { counts: { shared: number; sharedBreakdown: Breakdown } };
 
 export function sharedTitle(b: Breakdown): string {

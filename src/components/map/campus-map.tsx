@@ -8,6 +8,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { CAMPUS_CENTER } from "@/lib/locations";
 import { cn } from "@/lib/utils";
 import { categoryMeta } from "@/lib/categories";
+import { HandHelping, Gift, Siren, Search, type LucideIcon } from "lucide-react";
 import type { FeedItem } from "@/lib/services/feed";
 import type { TransitRoute, TransitStop } from "@/lib/services/transit";
 import { addWalkersWhenReady } from "./walkers-layer";
@@ -45,6 +46,24 @@ type Props = {
   userLocation?: { lat: number; lng: number } | null;
   className?: string;
 };
+
+// Visual identity per pin. Community posts read by TYPE (amber = needs help, mint = offering,
+// purple = lost & found, red = official alert); ingested items keep their category look
+// (blue calendar = event, slate = news, orange = transit notice).
+function markerVisual(it: FeedItem): { color: string; icon: LucideIcon } {
+  if (it.kind === "external") { const m = categoryMeta(it.category); return { color: m.color, icon: m.icon }; }
+  if (it.type === "alert") return { color: "#e5484d", icon: Siren };
+  if (it.category === "lost_found") return { color: "#a855f7", icon: Search };
+  if (it.type === "request") return { color: "#f0a21b", icon: HandHelping };
+  if (it.type === "offer") return { color: "#2fbf8f", icon: Gift };
+  const m = categoryMeta(it.category);
+  return { color: m.color, icon: m.icon };
+}
+
+// Clustering: below this zoom, pins sharing a ~72px cell collapse into one count bubble.
+const CLUSTER_BELOW = 15.3;
+const CLUSTER_CELL = 72;
+const rank = (it: FeedItem) => (it.type === "alert" ? 0 : it.kind === "post" ? 1 : 2);
 
 // Jitter so several posts at the same landmark fan out instead of stacking.
 function jitter(id: string, index: number): [number, number] {
@@ -115,7 +134,9 @@ export function CampusMap({ theme, markers, selectedId, onSelect, show3d, transi
   const el = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const markerRefs = useRef(new Map<string, { marker: maplibregl.Marker; root: Root; el: HTMLDivElement }>());
+  const clusterRefs = useRef(new Map<string, maplibregl.Marker>());
   const seen = useRef(new Set<string>());
+  const [clusterTick, setClusterTick] = useState(0);
   const [styleReady, setStyleReady] = useState(0);
   const onSelectRef = useRef(onSelect);
   onSelectRef.current = onSelect;
@@ -132,6 +153,7 @@ export function CampusMap({ theme, markers, selectedId, onSelect, show3d, transi
   useEffect(() => {
     if (!el.current || mapRef.current) return;
     const markersForMap = markerRefs.current;
+    const clustersForMap = clusterRefs.current;
     const map = new maplibregl.Map({
       container: el.current, style: STYLE_URLS[theme], ...HOME_CAMERA, minZoom: 12, maxZoom: 19, attributionControl: false,
       maxBounds: [[-79.14, 35.86], [-78.96, 35.96]], canvasContextAttributes: { antialias: true },
@@ -174,6 +196,8 @@ export function CampusMap({ theme, markers, selectedId, onSelect, show3d, transi
       map.getCanvas().style.cursor = busHit.current?.(e.point) || (layers.length && map.queryRenderedFeatures(e.point, { layers }).length) ? "pointer" : "";
     });
     mapRef.current = map;
+    // Regroup pins when the zoom settles (clusters form/dissolve at CLUSTER_BELOW).
+    map.on("zoomend", () => setClusterTick((n) => n + 1));
     // Debug handle for the 3D-map teammate and for automated render checks (`window.__aquaMap`).
     (window as unknown as { __aquaMap?: maplibregl.Map }).__aquaMap = map;
     const handle: MapHandle = {
@@ -195,6 +219,8 @@ export function CampusMap({ theme, markers, selectedId, onSelect, show3d, transi
         queueMicrotask(() => ref.root.unmount());
       }
       markersForMap.clear();
+      for (const m of clustersForMap.values()) m.remove();
+      clustersForMap.clear();
       map.remove(); mapRef.current = null;
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -219,24 +245,76 @@ export function CampusMap({ theme, markers, selectedId, onSelect, show3d, transi
     }
   }, [show3d, theme, styleReady]);
 
-  // ---- markers ----
+  // ---- markers (with zoom clustering) ----
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
     const next = new Map<string, FeedItem>();
     const byLoc = new Map<string, number>();
     for (const m of markers) if (m.lat != null && m.lng != null) next.set(m.id, m);
-    // remove stale
+
+    // Below CLUSTER_BELOW, group pins that fall in the same screen cell into a count bubble.
+    const clusters = new Map<string, { items: FeedItem[]; lng: number; lat: number }>();
+    const singles: FeedItem[] = [];
+    if (map.getZoom() < CLUSTER_BELOW) {
+      const cells = new Map<string, FeedItem[]>();
+      for (const m of next.values()) {
+        const p = map.project([m.lng!, m.lat!]);
+        const key = `${Math.floor(p.x / CLUSTER_CELL)},${Math.floor(p.y / CLUSTER_CELL)}`;
+        const arr = cells.get(key) ?? [];
+        arr.push(m);
+        cells.set(key, arr);
+      }
+      for (const [key, items] of cells) {
+        if (items.length < 2) { singles.push(...items); continue; }
+        clusters.set(key, {
+          items,
+          lng: items.reduce((s, i) => s + i.lng!, 0) / items.length,
+          lat: items.reduce((s, i) => s + i.lat!, 0) / items.length,
+        });
+      }
+    } else singles.push(...next.values());
+    const visible = new Set(singles.map((s) => s.id));
+
+    // remove stale pins + stale cluster bubbles
     for (const [id, ref] of markerRefs.current) {
-      if (!next.has(id)) { ref.marker.remove(); ref.root.unmount(); markerRefs.current.delete(id); }
+      if (!visible.has(id)) { ref.marker.remove(); ref.root.unmount(); markerRefs.current.delete(id); }
     }
-    for (const m of next.values()) {
+    for (const [key, mk] of clusterRefs.current) {
+      if (!clusters.has(key)) { mk.remove(); clusterRefs.current.delete(key); }
+    }
+
+    // Cluster bubbles: count + the color of the most important member (alert > post > external).
+    for (const [key, c] of clusters) {
+      const rep = [...c.items].sort((a, b) => rank(a) - rank(b))[0];
+      const color = markerVisual(rep).color;
+      let mk = clusterRefs.current.get(key);
+      if (!mk) {
+        const el = document.createElement("div");
+        el.className = "marker-cluster";
+        el.setAttribute("role", "button");
+        el.setAttribute("tabindex", "0");
+        const zoom = () => map.easeTo({ center: [c.lng, c.lat], zoom: Math.min(map.getZoom() + 1.7, 17), duration: 500 });
+        el.addEventListener("click", (e) => { e.stopPropagation(); zoom(); });
+        el.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); zoom(); } });
+        mk = new maplibregl.Marker({ element: el, anchor: "center" }).setLngLat([c.lng, c.lat]).addTo(map);
+        clusterRefs.current.set(key, mk);
+      } else {
+        mk.setLngLat([c.lng, c.lat]);
+      }
+      const el = mk.getElement();
+      el.style.setProperty("--pin", color);
+      el.setAttribute("aria-label", `${c.items.length} items here — zoom in`);
+      el.innerHTML = `<span>${c.items.length}</span>`;
+    }
+
+    for (const m of singles) {
       const key = `${m.lat!.toFixed(4)},${m.lng!.toFixed(4)}`;
       const idx = byLoc.get(key) ?? 0;
       byLoc.set(key, idx + 1);
       const [jx, jy] = jitter(m.id, idx);
       const existing = markerRefs.current.get(m.id);
-      const meta = categoryMeta(m.category);
+      const vis = markerVisual(m);
       const isNew = !seen.current.has(m.id) && seen.current.size > 0;
       if (existing) {
         existing.el.dataset.selected = String(selectedId === m.id);
@@ -249,8 +327,8 @@ export function CampusMap({ theme, markers, selectedId, onSelect, show3d, transi
       const div = document.createElement("div");
       wrap.appendChild(div);
       div.className = "marker";
-      div.style.background = meta.color;
-      div.style.setProperty("--pin", meta.color);
+      div.style.background = vis.color;
+      div.style.setProperty("--pin", vis.color);
       div.dataset.selected = String(selectedId === m.id);
       div.dataset.urgent = String(m.urgency === "urgent");
       div.dataset.demo = String(m.isDemo);
@@ -260,7 +338,7 @@ export function CampusMap({ theme, markers, selectedId, onSelect, show3d, transi
       div.setAttribute("aria-label", `${m.title}${m.locationName ? ` at ${m.locationName}` : ""}`);
       div.title = m.title;
       const root = createRoot(div);
-      const Icon = meta.icon;
+      const Icon = vis.icon;
       root.render(<><span className="shine" aria-hidden /><Icon aria-hidden /></>);
       const onClick = (e: Event) => { e.stopPropagation(); onSelectRef.current(m); };
       div.addEventListener("click", onClick);
@@ -270,7 +348,7 @@ export function CampusMap({ theme, markers, selectedId, onSelect, show3d, transi
       seen.current.add(m.id);
     }
     if (seen.current.size === 0) for (const id of next.keys()) seen.current.add(id);
-  }, [markers, selectedId]);
+  }, [markers, selectedId, clusterTick]);
 
   // ---- transit overlay ----
   useEffect(() => {

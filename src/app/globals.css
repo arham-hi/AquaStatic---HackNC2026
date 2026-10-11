@@ -225,6 +225,15 @@ body {
 .marker svg { width: 16px; height: 16px; position: relative; }
 .marker .shine { position: absolute; inset: 0; border-radius: 50%; background: radial-gradient(circle at 32% 26%, rgba(255,255,255,0.75) 0%, rgba(255,255,255,0.25) 22%, rgba(255,255,255,0) 50%); pointer-events: none; }
 .marker-glow { animation: pulse-ring 1.2s ease-out 3; }
+.marker-cluster {
+  min-width: 34px; height: 34px; padding: 0 8px; border-radius: 999px; display: grid; place-items: center; cursor: pointer;
+  background: rgba(255,255,255,0.82); backdrop-filter: blur(8px) saturate(1.3);
+  border: 2.5px solid var(--pin, #4b9cd3); color: #16324a;
+  font-size: 13px; font-weight: 800; font-variant-numeric: tabular-nums;
+  box-shadow: 0 6px 16px -6px rgba(0,0,0,0.45); transition: transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.marker-cluster:hover, .marker-cluster:focus-visible { transform: scale(1.14); }
+[data-theme="dark"] .marker-cluster { background: rgba(16,30,48,0.85); color: #dff2ff; }
 
 /* ---------- Refined Aero / liquid glass ---------- */
 :root {

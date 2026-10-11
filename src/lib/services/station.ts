@@ -72,16 +72,32 @@ function localPostLine(it: FeedItem): string {
   return `${firstName(it)} posted: ${title}${where}${demo}`;
 }
 
+// Rotating lead-ins so back-to-back local segments don't all open the same way.
+const UPDATE_OPENERS = [
+  "Here's what's going on",
+  "New on the board",
+  "Quick update for you",
+  "Fresh on Aqua Static",
+];
+const UPDATE_CTAS = [
+  "If you can help, reply in Connect",
+  "You can jump on that in Connect",
+  "Check it out in Connect if that sounds like you",
+];
+const SOON_OPENERS = ["Starting soon", "Coming up shortly", "Heads up, this is about to start"];
+const pick = <T,>(arr: T[], seed: number) => arr[Math.abs(Math.floor(seed)) % arr.length];
+
 function localScript(kind: StationKind, items: FeedItem[], liveCount: number, now: number): string {
+  const rot = now / MINUTE; // rotates the opener roughly once a minute
   switch (kind) {
     case "update": {
       const lines = items.slice(0, 3).map(localPostLine).join(". ");
-      const cta = items.some((i) => i.type === "request") ? " If you can help, reply in Connect." : " Details are in Connect.";
-      return `New on Aqua Static. ${lines}.${cta}`;
+      const cta = items.some((i) => i.type === "request") ? pick(UPDATE_CTAS, rot) : "Details are in Connect";
+      return `${pick(UPDATE_OPENERS, rot)}: ${lines}. ${cta}.`;
     }
     case "event_soon": {
       const it = items[0];
-      return `Starting soon: ${it.title} at ${fmtTime(it.startsAt)}${it.locationName ? `, ${it.locationName}` : ""}${it.sourceLabel ? `, via ${it.sourceLabel}` : ""}.`;
+      return `${pick(SOON_OPENERS, rot)}: ${it.title} at ${fmtTime(it.startsAt)}${it.locationName ? `, ${it.locationName}` : ""}${it.sourceLabel ? `, via ${it.sourceLabel}` : ""}.`;
     }
     case "alert": {
       const it = items[0];
@@ -90,7 +106,7 @@ function localScript(kind: StationKind, items: FeedItem[], liveCount: number, no
     }
     case "time_check": {
       const live = liveCount > 0 ? `${liveCount} ${liveCount === 1 ? "thing is" : "things are"} live on the board right now.` : "The board is quiet right now.";
-      return `It's ${fmtTime(now)} on ${fmtDay(now)} — you're listening to Aqua Static. ${live}`;
+      return `It's ${fmtTime(now)} on ${fmtDay(now)} — you're listening to Aqua FM. ${live}`;
     }
     default:
       return "";

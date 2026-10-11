@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { env, hasElevenLabs } from "@/lib/env";
@@ -6,6 +7,7 @@ import { dataDirectory } from "@/lib/data-dir";
 // ElevenLabs text-to-speech. Returns MP3 bytes. Cached per briefing on disk so audio scripts never change after generation.
 
 const audioDir = () => path.resolve(dataDirectory(), "audio");
+const MODEL = "eleven_turbo_v2_5";
 
 export class ElevenLabsError extends Error {
   constructor(public status: number, body: string) {
@@ -13,7 +15,7 @@ export class ElevenLabsError extends Error {
   }
 }
 
-export async function synthesize(text: string, voiceId = env.elevenlabs.voiceId, model = "eleven_turbo_v2_5"): Promise<Buffer> {
+export async function synthesize(text: string, voiceId = env.elevenlabs.voiceId, model = MODEL): Promise<Buffer> {
   if (!hasElevenLabs()) throw new Error("ELEVENLABS_API_KEY not configured");
   const res = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}?output_format=mp3_44100_128`, {
     method: "POST",
@@ -32,7 +34,12 @@ export async function synthesizeLive(text: string): Promise<Buffer> {
 
 export async function synthesizeToFile(id: string, text: string): Promise<string> {
   fs.mkdirSync(audioDir(), { recursive: true });
-  const file = path.join(audioDir(), `${id}.mp3`);
+  // Cache key = segment id + the full render identity (text, voice, model, settings). If the configured
+  // voice or model changes, old files miss the cache instead of silently replaying the wrong voice.
+  const sig = crypto.createHash("sha1")
+    .update(`${env.elevenlabs.voiceId}|${MODEL}|0.45/0.75/0.35/true|${text}`)
+    .digest("hex").slice(0, 12);
+  const file = path.join(audioDir(), `${id}-${sig}.mp3`);
   if (fs.existsSync(file)) return file;
   const buf = await synthesize(text);
   fs.writeFileSync(file, buf);

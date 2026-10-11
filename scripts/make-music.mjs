@@ -119,3 +119,49 @@ render({
     [40, 43, 47, 50], // E G B D
   ],
 });
+
+// Track 3 — "Carolina Gliss": Gmaj7 → Em7 → Cmaj7 → D6, brighter daytime feel.
+render({
+  seed: 42, bpm: 100, bars: 4, out: "carolina-gliss.wav", arpDensity: 0.9,
+  chords: [
+    [43, 47, 50, 54], // G B D F#
+    [40, 43, 47, 50], // E G B D
+    [48, 52, 55, 59], // C E G B
+    [45, 50, 52, 57], // A D E A (D6 colour)
+  ],
+});
+
+// ---------- short stingers (same synth voices, ~1s each) ----------
+
+/** seq: [midi, startBeats, durBeats][] at bpm. */
+function renderSfx({ bpm, seq, out, gain = 0.8 }) {
+  const beat = 60 / bpm;
+  const total = seq.reduce((m, [, s, d]) => Math.max(m, (s + d) * beat), 0) + 0.4;
+  const n = Math.floor(total * RATE);
+  const data = new Float32Array(n);
+  for (const [note, start, dur] of seq) {
+    const i0 = Math.floor(start * beat * RATE), i1 = Math.min(n, i0 + Math.floor((dur * beat + 0.35) * RATE));
+    for (let i = i0; i < i1; i++) data[i] += pluck(RATE, i / RATE, midi(note), start * beat);
+  }
+  const fade = Math.floor(0.06 * RATE);
+  let peak = 0.001;
+  for (const v of data) peak = Math.max(peak, Math.abs(v));
+  const g = gain / peak;
+  for (let i = 0; i < n; i++) {
+    let k = g;
+    if (i < fade) k *= i / fade;
+    if (i > n - fade) k *= (n - i) / fade;
+    data[i] = Math.tanh(data[i] * k);
+  }
+  writeWav(path.join(OUT, out), data);
+  console.log(`${out}: ${total.toFixed(1)}s`);
+}
+
+// Sign-on jingle: rising C-major arpeggio with a shimmer on top.
+renderSfx({ bpm: 132, out: "sfx-sign-on.wav", seq: [[60, 0, 0.5], [64, 0.5, 0.5], [67, 1, 0.5], [72, 1.5, 1.5], [76, 1.5, 1.5], [79, 2.5, 2]] });
+// News transition: quick two-note "coming up next" blip.
+renderSfx({ bpm: 140, out: "sfx-news.wav", gain: 0.7, seq: [[72, 0, 0.35], [79, 0.4, 0.6]] });
+// Community match chime: warm little triad — someone got helped.
+renderSfx({ bpm: 120, out: "sfx-match.wav", gain: 0.75, seq: [[64, 0, 0.4], [67, 0.3, 0.4], [72, 0.6, 1.2]] });
+// Outro: gentle two-note sign-off, resolves downward.
+renderSfx({ bpm: 110, out: "sfx-outro.wav", gain: 0.7, seq: [[67, 0, 0.5], [64, 0.55, 0.5], [60, 1.1, 1.6]] });

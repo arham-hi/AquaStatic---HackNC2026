@@ -46,9 +46,11 @@ function matchesInterest(it: FeedItem, interests: string[]): boolean {
 
 export function toRecord(it: FeedItem): GroundingRecord {
   const when = it.startsAt ? `${fmtDay(it.startsAt)} ${fmtTime(it.startsAt)}` : `posted ${fmtTime(it.at)}`;
+  // The detail is grounding, not air copy: cap it so a raw article body can never leak into TTS verbatim.
+  const summary = it.summary.length > 220 ? `${it.summary.slice(0, 217).trimEnd()}…` : it.summary;
   return {
     id: it.id, kind: `${it.type}/${it.category}`, title: it.title,
-    detail: `${it.summary}${it.locationName ? ` @ ${it.locationName}` : ""}${it.sourceLabel ? ` [${it.sourceLabel}]` : ""}`,
+    detail: `${summary}${it.locationName ? ` @ ${it.locationName}` : ""}${it.sourceLabel ? ` [${it.sourceLabel}]` : ""}`,
     at: when, isDemo: it.isDemo, href: it.href,
   };
 }
