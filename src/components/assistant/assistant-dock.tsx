@@ -32,7 +32,8 @@ export function AssistantDock() {
     setBusy(true);
     setTurns((t) => [...t, { role: "user", text }, { role: "assistant", text: "", pending: true }]);
     try {
-      const reply = await api.post<AssistantReply>("/api/assistant", { question: text });
+      const history = turns.filter((t) => t.role === "user").map((t) => t.text).slice(-8);
+      const reply = await api.post<AssistantReply>("/api/assistant", { question: text, history });
       setTurns((t) => [...t.slice(0, -1), { role: "assistant", text: reply.answer, reply }]);
     } catch (e) {
       setTurns((t) => [...t.slice(0, -1), { role: "assistant", text: `Sorry — ${(e as Error).message}` }]);

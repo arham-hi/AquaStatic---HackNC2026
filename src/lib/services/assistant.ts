@@ -1,8 +1,9 @@
 // Grounded campus assistant: interpret → retrieve from our own data → compose. Never answers from thin air.
 
 import { interpretQuery, composeAnswer, parsePost, type GroundingRecord } from "@/lib/ai";
+import { interpretQueryLocal } from "@/lib/ai/fallback";
 import { getLocation, LOCATIONS } from "@/lib/locations";
-import { fmtTime, fmtDay, HOUR } from "@/lib/time";
+import { fmtTime, fmtDay, HOUR, startOfCampusDay, endOfCampusDay, campusTodayAt } from "@/lib/time";
 import { listFeed, type FeedItem } from "./feed";
 import { toRecord } from "./briefings";
 import { loadTransit, OFFICIAL_TRACKING_URL } from "./transit";
@@ -29,9 +30,17 @@ const say = (it: FeedItem, now: number) => {
   return `• ${who}${it.title}${where}${when}${demo}`;
 };
 
-export async function ask(user: User | null, question: string, now = Date.now()): Promise<AssistantReply> {
+export async function ask(user: User | null, question: string, now = Date.now(), history: string[] = []): Promise<AssistantReply> {
   const q = question.trim();
   const intent = await interpretQuery(q);
+  const local = interpretQueryLocal(q);
+  // A short location-only follow-up changes the place, not the topic.
+  if (local.intent === "near_location" && local.locationId && q.split(/\s+/).length <= 6) {
+    const previous = history.slice(-8).reverse().map(interpretQueryLocal)
+      .find((p) => !["near_location", "unknown", "create_post"].includes(p.intent));
+    if (previous) Object.assign(intent, { ...previous, locationId: local.locationId,
+      timeframe: local.timeframe === "any" ? previous.timeframe : local.timeframe });
+  }
   const loc = getLocation(intent.locationId);
 
   // A statement like "I need a charger at Davis" → prepare a draft, do not publish.
@@ -47,15 +56,20 @@ export async function ask(user: User | null, question: string, now = Date.now())
   const base = (await listFeed({ filter: "all", window: "all", limit: 400 }, now)).items;
   const inWindow = (it: FeedItem) => {
     const t = it.startsAt ?? it.at;
+    if (it.type === "event" && (it.endsAt ?? it.startsAt ?? it.expiresAt ?? t) < now) return false;
     if (intent.timeframe === "now") return it.kind === "post" || it.type === "alert" || (it.startsAt != null && it.startsAt < now + 3 * HOUR && (it.endsAt ?? it.startsAt) > now - HOUR);
-    if (intent.timeframe === "today" || intent.timeframe === "tonight") return it.kind === "post" || t < now + 18 * HOUR;
+    if (intent.timeframe === "today" || intent.timeframe === "tonight") {
+      if (it.type !== "event" && it.kind === "post") return true;
+      const begin = intent.timeframe === "tonight" ? campusTodayAt(17, 0, now) : startOfCampusDay(now);
+      return t <= endOfCampusDay(now) && (it.endsAt ?? t) >= begin;
+    }
     if (intent.timeframe === "week") return t < now + 7 * 24 * HOUR;
     return true;
   };
   let pool = base.filter(inWindow);
   if (loc) {
     const near = pool.filter((it) => it.locationId === loc.id || (it.lat != null && it.lng != null && Math.hypot((it.lat - loc.lat) * 111000, (it.lng - loc.lng) * 90000) < 350));
-    pool = near.length ? near : pool;
+    pool = near;
   }
   const kw = intent.keywords.filter((k) => k.length > 2 && !LOCATIONS.some((l) => l.aliases.includes(k) || l.name.toLowerCase() === k));
   const kwMatch = (it: FeedItem) => kw.some((k) => `${it.title} ${it.summary} ${it.category}`.toLowerCase().includes(k));
@@ -95,15 +109,18 @@ export async function ask(user: User | null, question: string, now = Date.now())
   const records: GroundingRecord[] = picked.map(toRecord);
 
   // ---- compose ----
-  const ai = await composeAnswer(q, records);
+  const resolvedQuestion = `${q}\nSearch intent: ${intent.intent}; timeframe: ${intent.timeframe}; location: ${loc?.name ?? "campus"}. Current campus time: ${fmtDay(now)} ${fmtTime(now)}. Records have already been filtered for this search; a nearby event need not mention the exact building in its title.`;
+  const ai = records.length ? await composeAnswer(resolvedQuestion, records) : null;
   let answer: string;
   let provider: "gemini" | "local" = "local";
   if (ai) {
     answer = ai.answer;
     provider = "gemini";
-    if (ai.citedIds.length) picked = picked.filter((p) => ai.citedIds.includes(p.id)).concat(picked.filter((p) => !ai.citedIds.includes(p.id))).slice(0, 6);
+    picked = picked.filter((p) => ai.citedIds.includes(p.id));
   } else if (!picked.length) {
-    answer = `I couldn't find anything verified in Aqua Static for that${loc ? ` near ${loc.name}` : ""}${intent.timeframe !== "any" ? ` for ${intent.timeframe}` : ""}. Nothing is posted yet. For official listings try calendar.unc.edu, alertcarolina.unc.edu for safety notices, or mychtransit.org for buses.`;
+    answer = intent.intent === "events"
+      ? `No ${intent.timeframe === "any" ? "upcoming" : intent.timeframe === "now" ? "current" : intent.timeframe} events are listed in Aqua Static${loc ? ` within 350 metres of ${loc.name}` : ""}. Try another location or a wider time window. This doesn't mean there are no events—only that none match the records available here.`
+      : `I couldn't find matching records in Aqua Static${loc ? ` within 350 metres of ${loc.name}` : ""}${intent.timeframe !== "any" ? ` for ${intent.timeframe}` : ""}. Try another location or a wider time window.`;
   } else {
     const demoNote = picked.some((p) => p.isDemo) ? "\n\nItems marked [demo] are simulated demonstration posts, not real campus activity." : "";
     answer = `${heading} (${picked.length}):\n${picked.map((i) => say(i, now)).join("\n")}${demoNote}`;
