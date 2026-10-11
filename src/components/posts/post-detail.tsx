@@ -79,7 +79,7 @@ export function PostDetail({ item, onClose, className }: { item: FeedItem; onClo
         {post?.attributes.destination && (<><dt className="text-fg-faint flex items-center gap-1"><Car className="size-3.5" />Going to</dt><dd>{post.attributes.destination}</dd></>)}
         {(live.locationName || post?.locationNote) && (<><dt className="text-fg-faint flex items-center gap-1"><MapPin className="size-3.5" />Where</dt><dd>{live.locationName}{post?.locationNote ? ` · ${post.locationNote}` : ""}</dd></>)}
         {live.expiresAt && isPost && (<><dt className="text-fg-faint flex items-center gap-1"><Hourglass className="size-3.5" />Expires</dt><dd>{timeUntil(live.expiresAt)} · {fmtDateTime(live.expiresAt)}</dd></>)}
-        {nearest.data?.stop && !nearest.data.demo && (<><dt className="text-fg-faint flex items-center gap-1"><Bus className="size-3.5" />Bus</dt><dd className="truncate">{nearest.data.stop.name} · {nearest.data.stop.meters} m{nearest.data.stop.routes.length ? ` · ${nearest.data.stop.routes.join(", ")}` : ""} · <Link href="/?buses=1" className="text-carolina hover:underline">routes</Link></dd></>)}
+        {nearest.data?.stop && (<><dt className="text-fg-faint flex items-center gap-1"><Bus className="size-3.5" />Bus</dt><dd className="truncate">{nearest.data.stop.name} · {nearest.data.stop.meters} m{nearest.data.stop.routes.length ? ` · ${nearest.data.stop.routes.join(", ")}` : ""} · <Link href="/?buses=1" className="text-carolina hover:underline">routes</Link></dd></>)}
         <dt className="text-fg-faint">Source</dt>
         <dd className="truncate">{isPost ? (data?.author ? `${data.author.avatar} ${data.author.displayName}` : loading ? <Skeleton className="w-24 inline-block" /> : "Community") : live.sourceLabel}</dd>
       </dl>

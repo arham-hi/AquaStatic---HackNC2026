@@ -56,7 +56,6 @@ export function Player({ briefing, elevenlabs }: { briefing: ClientBriefing; ele
           <Badge tone="carolina"><meta.icon className="size-3" />{meta.label}</Badge>
           <Badge tone={briefing.provider === "gemini" ? "violet" : "neutral"}>{briefing.provider === "gemini" ? <Bot className="size-3" /> : <Cpu className="size-3" />}{briefing.provider === "gemini" ? "Gemini" : "Local script"}</Badge>
           <Badge tone={mode === "mp3" ? "mint" : "neutral"}><AudioLines className="size-3" />{voiceLabel}</Badge>
-          {briefing.includesDemo && <Badge tone="amber">Includes demo data</Badge>}
         </div>
         <h2 className="mt-3 text-xl sm:text-2xl font-semibold tracking-tight text-balance">{briefing.title}</h2>
         <p className="mt-1 text-xs text-fg-muted">
@@ -172,7 +171,6 @@ export function Player({ briefing, elevenlabs }: { briefing: ClientBriefing; ele
                       <span className="block truncate text-sm font-medium">{s.title}</span>
                       <span className="block text-[11px] text-fg-muted">{s.at ? fmtDateTime(s.at) : s.kind}</span>
                     </span>
-                    {s.isDemo && <Badge tone="amber">DEMO</Badge>}
                     <ExternalLink className="size-3.5 text-fg-faint shrink-0" />
                   </>
                 );

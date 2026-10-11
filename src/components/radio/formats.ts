@@ -34,6 +34,6 @@ export function fmtClock(sec: number): string {
 
 export function briefingAsText(b: ClientBriefing): string {
   const body = b.segments.length ? b.segments.map((s) => `${s.title}\n${"-".repeat(s.title.length)}\n${s.text}`).join("\n\n") : b.script;
-  const sources = b.sources.length ? `\n\nSources\n-------\n${b.sources.map((s) => `- ${s.title}${s.isDemo ? " (demo)" : ""}${s.href ? ` — ${s.href}` : ""}`).join("\n")}` : "";
+  const sources = b.sources.length ? `\n\nSources\n-------\n${b.sources.map((s) => `- ${s.title}${s.href ? ` — ${s.href}` : ""}`).join("\n")}` : "";
   return `${b.title}\n${new Date(b.createdAt).toLocaleString()}\n\n${body}${sources}\n`;
 }

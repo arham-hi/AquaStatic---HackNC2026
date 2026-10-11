@@ -27,7 +27,7 @@ export async function integrationStatusProbe(): Promise<IntegrationStatus[]> {
   return quick.map((s) => {
     if (s.id === "gemini") return { ...s, state: !hasGemini() ? "fallback" : g.ok ? "connected" : "error", detail: g.detail, checkedAt: now };
     if (s.id === "elevenlabs") return { ...s, state: !hasElevenLabs() ? "fallback" : e.ok ? "connected" : "error", detail: e.detail, checkedAt: now };
-    if (s.id === "transit") return { ...s, state: t.mode === "gtfs" ? "connected" : "fallback", detail: t.mode === "gtfs" ? `Scheduled data: ${t.routes.length} routes, ${t.stops.length} stops (${t.feedVersion}). Real-time positions: not available (official tracker linked).` : "Demo overlay only — GTFS download failed", checkedAt: now };
+    if (s.id === "transit") return { ...s, state: t.mode === "gtfs" ? "connected" : "fallback", detail: t.mode === "gtfs" ? `Scheduled data: ${t.routes.length} routes, ${t.stops.length} stops (${t.feedVersion}). Real-time positions: not available (official tracker linked).` : "Offline schedule only — GTFS download failed", checkedAt: now };
     return s;
   });
 }

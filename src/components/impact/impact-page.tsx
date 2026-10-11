@@ -6,7 +6,7 @@ import { Gift, Leaf, HeartHandshake, Recycle, Users, ArrowRight, HandHelping } f
 import Link from "next/link";
 import { useLive } from "@/hooks/useLive";
 import { Page } from "@/components/shell/app-shell";
-import { Badge, EmptyState, Skeleton } from "@/components/ui/primitives";
+import { EmptyState, Skeleton } from "@/components/ui/primitives";
 import { Button } from "@/components/ui/button";
 import { categoryMeta } from "@/lib/categories";
 import { fmtTime, timeAgo } from "@/lib/time";
@@ -14,7 +14,7 @@ import { sharedTitle } from "@/components/feed/shared-tally";
 import { cn } from "@/lib/utils";
 import type { ImpactDashboard } from "@/lib/services/impact";
 
-function StatCard({ icon: Icon, n, label, sub, demo, tone }: { icon: typeof Leaf; n: number; label: string; sub?: string; demo: number; tone: "mint" | "carolina" }) {
+function StatCard({ icon: Icon, n, label, sub, tone }: { icon: typeof Leaf; n: number; label: string; sub?: string; tone: "mint" | "carolina" }) {
   return (
     <div className="card relative overflow-hidden p-4">
       <div className={cn("absolute -right-5 -top-5 size-20 rounded-full blur-2xl", tone === "mint" ? "bg-mint-soft" : "bg-carolina-soft")} aria-hidden />
@@ -26,7 +26,6 @@ function StatCard({ icon: Icon, n, label, sub, demo, tone }: { icon: typeof Leaf
         <div className="mt-2 text-3xl font-bold tracking-tight tabular-nums">{n}</div>
         <div className="mt-1 flex min-h-4 items-center gap-2 text-[11px] text-fg-muted">
           {sub && <span className="truncate">{sub}</span>}
-          {demo > 0 && <Badge tone="amber" className="!px-1.5">incl. {demo} demo</Badge>}
         </div>
       </div>
     </div>
@@ -86,10 +85,10 @@ export function ImpactPage() {
         ) : (
           <>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              <StatCard icon={Gift} n={d.resourcesShared.total} label="Resources shared" sub={d.breakdown.total > 0 ? sharedTitle(d.breakdown) : "completed exchanges"} demo={d.resourcesShared.demo} tone="mint" />
-              <StatCard icon={Users} n={d.peopleHelped.total} label="Students helped" sub={`${d.helpResolved.total} requests resolved`} demo={d.peopleHelped.demo} tone="carolina" />
-              <StatCard icon={HeartHandshake} n={d.connections.total} label="Connections made" sub="unique pairs, both confirmed" demo={d.connections.demo} tone="carolina" />
-              <StatCard icon={Recycle} n={d.reuseActions.total} label="Items kept in use" sub="borrowed, rehomed or returned" demo={d.reuseActions.demo} tone="mint" />
+              <StatCard icon={Gift} n={d.resourcesShared.total} label="Resources shared" sub={d.breakdown.total > 0 ? sharedTitle(d.breakdown) : "completed exchanges"} tone="mint" />
+              <StatCard icon={Users} n={d.peopleHelped.total} label="Students helped" sub={`${d.helpResolved.total} requests resolved`} tone="carolina" />
+              <StatCard icon={HeartHandshake} n={d.connections.total} label="Connections made" sub="unique pairs, both confirmed" tone="carolina" />
+              <StatCard icon={Recycle} n={d.reuseActions.total} label="Items kept in use" sub="borrowed, rehomed or returned" tone="mint" />
             </div>
 
             <ActivityChart series={d.series} />
@@ -119,7 +118,6 @@ export function ImpactPage() {
                               <span>{meta.label}</span>
                             )}
                             <span className="text-fg-faint">· {timeAgo(e.at)}</span>
-                            {e.isDemo && <Badge tone="amber" className="!px-1.5">DEMO</Badge>}
                           </div>
                         </div>
                       </li>
@@ -131,7 +129,7 @@ export function ImpactPage() {
 
             <p className="px-1 text-[11px] leading-relaxed text-fg-faint">
               Every number comes from exchanges both participants confirmed in Aqua Static — never an estimate,
-              a dollar figure, or a carbon guess. Exchanges involving demo posts are always labeled.
+              a dollar figure, or a carbon guess.
             </p>
           </>
         )}

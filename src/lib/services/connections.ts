@@ -158,6 +158,7 @@ export async function claimOffer(me: User, offerId: string, now = Date.now()): P
   if (offer.type !== "offer") throw new ApiError(400, "Only offers can be claimed");
   if (offer.status !== "open") throw new ApiError(409, "This one has already been claimed");
   if (offer.authorId === me.id) throw new ApiError(400, "That's your own post");
+  if (offer.isDemo !== me.isDemo) throw new ApiError(400, "That post belongs to a different community board");
   if (offer.expiresAt && offer.expiresAt.getTime() <= now) throw new ApiError(409, "This offer has expired");
   const blocked = offer.authorId ? (await db.select().from(schema.blocks).where(or(
     and(eq(schema.blocks.userId, offer.authorId), eq(schema.blocks.blockedUserId, me.id)),

@@ -1,6 +1,6 @@
 "use client";
 // The centerpiece: real Chapel Hill geography (OpenFreeMap vector tiles), 3D buildings, live markers, transit overlay,
-// match connection animation. Markers are DOM elements so they can carry icons, pulses and DEMO labels.
+// match connection animation. Markers are DOM elements so they can carry icons and pulses.
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import maplibregl from "@/lib/maplibre";
@@ -336,7 +336,6 @@ export function CampusMap({ theme, markers, selectedId, onSelect, show3d, transi
       div.style.setProperty("--pin", vis.color);
       div.dataset.selected = String(selectedId === m.id);
       div.dataset.urgent = String(m.urgency === "urgent");
-      div.dataset.demo = String(m.isDemo);
       div.dataset.new = String(isNew);
       div.setAttribute("role", "button");
       div.setAttribute("tabindex", "0");

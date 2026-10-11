@@ -2,10 +2,11 @@
 // Connect: one stream of everything happening, plus your matches. Chat opens in a sheet, not a page.
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
-import { HeartHandshake, Plus, Check, X, MessageSquare, CheckCircle2, Search as SearchIcon, Gift, HandHelping, MapPin } from "lucide-react";
+import { HeartHandshake, Plus, Check, X, MessageSquare, CheckCircle2, Search as SearchIcon, Gift, HandHelping, MapPin, Map as MapIcon } from "lucide-react";
 import { useLive } from "@/hooks/useLive";
 import { api } from "@/lib/client";
 import { useSession, useUI } from "@/components/shell/providers";
@@ -17,8 +18,9 @@ import { PostDetail } from "@/components/posts/post-detail";
 import { ConversationThread } from "@/components/messages/conversation-thread";
 import { getLocation } from "@/lib/locations";
 import { AquaImpact } from "@/components/feed/aqua-impact";
+import { Celebration, playSuccessChime } from "@/components/impact/celebration";
 import { timeAgo } from "@/lib/time";
-import { cn } from "@/lib/utils";
+import { cn, matchStrength } from "@/lib/utils";
 import type { MatchView } from "@/lib/services/connections";
 import type { FeedItem } from "@/lib/services/feed";
 import type { Post } from "@/lib/db/schema";
@@ -37,6 +39,7 @@ export function ConnectPage() {
   const [selected, setSelected] = useState<FeedItem | null>(null);
   const [matchOpen, setMatchOpen] = useState<string | null>(params.get("match"));
   const [chatId, setChatId] = useState<string | null>(null);
+  const [celebrated, setCelebrated] = useState<MatchView | null>(null);
 
   const feedUrl = useMemo(() => `/api/feed?filter=${scope === "events" ? "events" : "all"}&window=recent&limit=${limit}${q ? `&q=${encodeURIComponent(q)}` : ""}`, [scope, q, limit]);
   const feed = useLive<FeedResp>(feedUrl, { interval: 5000, scopes: ["posts", "matches", "sources"] });
@@ -60,7 +63,11 @@ export function ConnectPage() {
       if (action === "accept") {
         if (r.match.status === "accepted" && r.match.conversationId) { toast.success("You're connected!"); setMatchOpen(null); setChatId(r.match.conversationId); }
         else toast.success("Accepted. Chat opens as soon as they accept too.");
-      } else if (action === "complete") toast.success("Marked complete.");
+      } else if (action === "complete") {
+        // The backend confirmed the transition — only now does the celebration play.
+        if (r.match.status === "completed") { setMatchOpen(null); setCelebrated(r.match); playSuccessChime(); }
+        else toast.success("Marked complete.");
+      }
       else toast(action === "decline" ? "Match declined" : "You left the match.");
     } catch (e) { toast.error((e as Error).message); }
   };
@@ -104,6 +111,7 @@ export function ConnectPage() {
           {chatId && <div className="h-[70dvh] flex flex-col"><ConversationThread id={chatId} embedded /></div>}
         </DialogContent>
       </Dialog>
+      {celebrated && <Celebration match={celebrated} onClose={() => setCelebrated(null)} />}
     </Page>
   );
 }
@@ -120,7 +128,10 @@ export function MatchCard({ m, onRespond, onOpen, onChat, highlight }: { m: Matc
       className={cn("card p-4", highlight && "ring-2 ring-mint/60", m.status === "suggested" && "border-mint/40")}>
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2 text-sm font-semibold"><HeartHandshake className="size-4 text-mint" />{m.status === "suggested" ? "Potential match" : m.status === "accepted" ? "Connected" : "Completed"}</div>
-        <button type="button" onClick={onOpen} className="text-xs text-carolina hover:underline">Why? <b>{Math.round(m.score * 100)}%</b></button>
+        <div className="flex items-center gap-3">
+          <Link href={`/?match=${m.id}`} className="inline-flex items-center gap-1 text-xs text-carolina hover:underline"><MapIcon className="size-3" /> Map</Link>
+          <button type="button" onClick={onOpen} className="text-xs text-carolina hover:underline">Why? <b>{Math.round(m.score * 100)}%</b></button>
+        </div>
       </div>
       <div className="mt-3 grid grid-cols-[1fr_auto_1fr] items-center gap-2">
         <Side label="Request" who={m.requester} post={m.request} loc={reqLoc?.name} tone="carolina" />
@@ -152,9 +163,23 @@ function Side({ label, who, post, loc, tone }: { label: string; who: MatchView["
 
 function MatchExplain({ m, onRespond, onChat }: { m: MatchView; onRespond: (id: string, a: "accept" | "decline" | "complete" | "leave") => Promise<void>; onChat: () => void }) {
   const mineAccepted = m.myRole === "requester" ? m.requesterAccepted : m.offererAccepted;
+  const reqLoc = getLocation(m.request.locationId), offLoc = getLocation(m.offer.locationId);
   return (
     <div className="space-y-4">
-      <div className="text-sm"><div className="font-semibold">{m.request.title}</div><div className="text-fg-muted">↔ {m.offer.title}</div></div>
+      <div>
+        <div className="flex items-center gap-2">
+          <Badge tone="mint"><HeartHandshake className="size-3" /> {matchStrength(m.score)}</Badge>
+          <span className="text-xs text-fg-muted tabular-nums">match score {Math.round(m.score * 100)} / 100</span>
+        </div>
+        <div className="mt-2 text-sm"><div className="font-semibold">{m.request.title}</div><div className="text-fg-muted">↔ {m.offer.title}</div></div>
+        {(reqLoc || offLoc) && (
+          <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-fg-muted">
+            {reqLoc && <span className="inline-flex items-center gap-1"><MapPin className="size-3 text-carolina" />{reqLoc.name}</span>}
+            {offLoc && <span className="inline-flex items-center gap-1"><MapPin className="size-3 text-mint" />{offLoc.name}</span>}
+          </div>
+        )}
+        <p className="mt-1.5 text-xs leading-relaxed text-fg-muted">{m.explanation.reason}</p>
+      </div>
       <ul className="space-y-2">
         {m.explanation.parts.map((p) => (
           <li key={p.label}>
@@ -165,7 +190,10 @@ function MatchExplain({ m, onRespond, onChat }: { m: MatchView; onRespond: (id: 
         ))}
       </ul>
       {m.status === "suggested" && m.myRole && !mineAccepted && <div className="flex gap-2"><Button variant="mint" onClick={() => onRespond(m.id, "accept")}><Check /> Accept match</Button><Button variant="ghost" onClick={() => onRespond(m.id, "decline")}>Decline</Button></div>}
-      {m.status === "accepted" && m.conversationId && <Button onClick={onChat}><MessageSquare /> Open chat</Button>}
+      <div className="flex flex-wrap gap-2">
+        {m.status === "accepted" && m.conversationId && <Button onClick={onChat}><MessageSquare /> Open chat</Button>}
+        <Button variant="secondary" asChild><Link href={`/?match=${m.id}`}><MapIcon /> View on map</Link></Button>
+      </div>
     </div>
   );
 }

@@ -48,13 +48,12 @@ export function TransitPage() {
     return <EmptyState icon={AlertTriangle} title="Couldn't load transit data" body={error ?? "Unknown error"} action={<Button onClick={() => void refresh()}>Retry</Button>} />;
   }
 
-  const demo = data.mode === "demo";
   const onStop = (stop: TransitStop) => setFocus({ stop, nonce: Date.now() });
 
   return (
     <div className="flex flex-col gap-5">
-      <p className={cn("text-sm text-fg-muted flex flex-wrap items-center gap-x-2 gap-y-1", demo && "text-amber")}>
-        {demo ? <><AlertTriangle className="size-4 shrink-0" /> DEMO overlay — approximate geometry, not a real schedule.</> : <><Bus className="size-4 text-carolina shrink-0" aria-hidden /> {routes.length} Chapel Hill Transit routes · schedule data, updated {timeAgo(data.fetchedAt)}.</>}
+      <p className="text-sm text-fg-muted flex flex-wrap items-center gap-x-2 gap-y-1">
+        <Bus className="size-4 text-carolina shrink-0" aria-hidden /> {routes.length} Chapel Hill Transit routes · schedule data, updated {timeAgo(data.fetchedAt)}.
         <a href={data.realtime.officialUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-carolina hover:underline"><Radio className="size-3.5" /> Live buses on mychtransit.org <ExternalLink className="size-3" /></a>
       </p>
 

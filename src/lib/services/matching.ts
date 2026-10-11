@@ -123,6 +123,7 @@ export async function runMatching(postId: string, now = Date.now()): Promise<Mat
   const created: Match[] = [];
   for (const c of candidates) {
     if (c.authorId && blocked.has(c.authorId)) continue;
+    if (c.isDemo !== post.isDemo) continue; // demo content never suggests matches to real users (and vice versa)
     if (existingByOther.has(c.id)) continue;
     const request = post.type === "request" ? post : c;
     const offer = post.type === "offer" ? post : c;

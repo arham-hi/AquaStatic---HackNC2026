@@ -113,7 +113,7 @@ function AccountMenu({ overlay, userName, avatar }: { overlay: boolean; userName
         {demoMode && (
           <>
             <DropdownSeparator />
-            <DropdownLabel>Demo profiles</DropdownLabel>
+            <DropdownLabel>Switch profile</DropdownLabel>
             {(demo.data?.users ?? []).map((u) => (
               <DropdownItem key={u.id} onSelect={() => void switchDemoUser(u.id)} className={cn(user?.id === u.id && "bg-carolina-soft/60")}>
                 <span className="text-base leading-none">{u.avatar}</span> {u.displayName}
@@ -121,7 +121,7 @@ function AccountMenu({ overlay, userName, avatar }: { overlay: boolean; userName
             ))}
             {user && <DropdownItem onSelect={() => void switchDemoUser(null)}><LogOut className="size-4" /> Sign out</DropdownItem>}
             <DropdownSeparator />
-            <DropdownItem asChild><Link href="/developer"><Wrench className="size-4" /> Demo remote</Link></DropdownItem>
+            <DropdownItem asChild><Link href="/developer"><Wrench className="size-4" /> Developer tools</Link></DropdownItem>
           </>
         )}
       </DropdownContent>

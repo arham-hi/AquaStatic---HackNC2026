@@ -193,7 +193,7 @@ function DemoProfilesCard() {
   const demo = useLive<{ users: { id: string; displayName: string; avatar: string }[] }>("/api/demo", { interval: 30000 });
   return (
     <Card className="space-y-3">
-      <div className="font-semibold text-sm">Demo profiles</div>
+      <div className="font-semibold text-sm">Switch profile</div>
       <div className="flex flex-wrap gap-1.5">
         {(demo.data?.users ?? []).map((u) => <Chip key={u.id} active={user?.id === u.id} onClick={() => switchDemoUser(u.id)}>{u.avatar} {u.displayName}</Chip>)}
       </div>

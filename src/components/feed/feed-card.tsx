@@ -12,9 +12,8 @@ import type { FeedItem } from "@/lib/services/feed";
 
 export type FeedItemWithSaved = FeedItem & { saved?: boolean };
 
-/** One quiet label: the type for community posts, the source for official items, DEMO when simulated. */
+/** One quiet label: the type for community posts, the source for official items. */
 export function TrustBadge({ item }: { item: Pick<FeedItem, "trust" | "sourceStatus" | "sourceLabel"> }) {
-  if (item.trust === "demo") return <Badge tone="amber">DEMO</Badge>;
   if (item.trust === "official") return <Badge tone="mint">{item.sourceLabel}</Badge>;
   return null;
 }

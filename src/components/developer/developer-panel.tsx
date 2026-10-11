@@ -14,16 +14,16 @@ import { timeAgo } from "@/lib/time";
 import type { IntegrationStatus } from "@/lib/services/integrations";
 
 type Source = { id: string; name: string; url: string; homepage: string; adapter: string; kind: string; enabled: boolean; lastFetchedAt: string | null; lastError: string | null; lastCount: number };
-type Demo = { demoMode: boolean; users: { id: string; displayName: string; avatar: string }[]; steps: Partial<Record<"mayaRequest" | "jordanOffer", { user: string; text: string }>>; currentUserId: string | null };
+type Demo = { demoMode: boolean; users: { id: string; displayName: string; avatar: string }[]; steps: Partial<Record<"aadeeRequest" | "jordanOffer", { user: string; text: string }>>; currentUserId: string | null };
 
 const STATE: Record<IntegrationStatus["state"], { label: string; tone: "mint" | "carolina" | "neutral" | "red" }> = {
-  connected: { label: "Connected", tone: "mint" }, fallback: { label: "Demo fallback", tone: "carolina" }, not_configured: { label: "Not configured", tone: "neutral" }, error: { label: "Error", tone: "red" },
+  connected: { label: "Connected", tone: "mint" }, fallback: { label: "Fallback", tone: "carolina" }, not_configured: { label: "Not configured", tone: "neutral" }, error: { label: "Error", tone: "red" },
 };
 
 export function DeveloperPanel() {
   const { demoMode, loading } = useSession();
   if (loading) return <Skeleton className="h-40 rounded-2xl" />;
-  if (!demoMode) return <EmptyState icon={Wrench} title="Demo mode is off" body="Set DEMO_MODE=true to unlock the demo remote and integration tools." />;
+  if (!demoMode) return <EmptyState icon={Wrench} title="Developer tools are off" body="Set DEMO_MODE=true to unlock scenario controls and integration tools." />;
   return (
     <div className="grid gap-4 xl:grid-cols-2 [&>*]:min-w-0">
       <Integrations />
@@ -50,7 +50,7 @@ function Integrations() {
     setTransitBusy(true);
     try {
       const r = await api.post<{ mode: string; routeCount: number; stopCount: number; feedVersion?: string }>("/api/transit/refresh");
-      toast.success(r.mode === "gtfs" ? `GTFS loaded: ${r.routeCount} routes, ${r.stopCount} stops${r.feedVersion ? ` (${r.feedVersion})` : ""}` : "GTFS download failed — demo overlay active");
+      toast.success(r.mode === "gtfs" ? `GTFS loaded: ${r.routeCount} routes, ${r.stopCount} stops${r.feedVersion ? ` (${r.feedVersion})` : ""}` : "GTFS download failed — offline schedule active");
     } catch (e) { toast.error((e as Error).message); } finally { setTransitBusy(false); }
   };
   return (
@@ -126,9 +126,9 @@ function DemoControls() {
     try { await fn(); } catch (e) { toast.error((e as Error).message); } finally { setBusy(null); }
   };
   const actions: { key: string; label: string; icon: React.ComponentType<{ className?: string }>; variant?: "primary" | "secondary" | "danger" | "mint"; fn: () => Promise<void> }[] = [
-    { key: "reset", label: "Reset demo to start", icon: RotateCcw, variant: "danger", fn: async () => { if (!confirm("Wipe demo posts, matches and messages, then reseed?")) return; await api.post("/api/demo/reset"); await refresh(); toast.success("Demo reset"); } },
+    { key: "reset", label: "Reset scenario data", icon: RotateCcw, variant: "danger", fn: async () => { if (!confirm("Wipe seeded posts, matches and messages, then reseed?")) return; await api.post("/api/demo/reset"); await refresh(); toast.success("Scenario reset"); } },
     { key: "seed", label: "Load example activity", icon: Database, variant: "secondary", fn: async () => { await api.post("/api/demo/seed"); toast.success("Example activity loaded"); } },
-    { key: "maya", label: "Inject Maya's charger request", icon: Zap, fn: async () => { await api.post("/api/demo/inject", { step: "mayaRequest" }); toast.success("Posted as Maya"); } },
+    { key: "aadee", label: "Inject Aadee's charger request", icon: Zap, fn: async () => { await api.post("/api/demo/inject", { step: "aadeeRequest" }); toast.success("Posted as Aadee"); } },
     { key: "jordan", label: "Inject Jordan's charger offer", icon: Zap, fn: async () => {
       const r = await api.post<{ matches: { id: string }[] }>("/api/demo/inject", { step: "jordanOffer" });
       const m = r.matches[0];
@@ -140,9 +140,9 @@ function DemoControls() {
 
   return (
     <Card className="space-y-4">
-      <SectionTitle>Demo control panel</SectionTitle>
+      <SectionTitle>Scenario controls</SectionTitle>
       <div>
-        <div className="text-xs font-semibold uppercase tracking-wide text-fg-faint mb-1.5">Current demo profile</div>
+        <div className="text-xs font-semibold uppercase tracking-wide text-fg-faint mb-1.5">Active profile</div>
         <div className="flex flex-wrap gap-1.5">
           {(demo.data?.users ?? []).map((u) => <Chip key={u.id} active={user?.id === u.id} onClick={() => switchDemoUser(u.id)}>{u.avatar} {u.displayName}</Chip>)}
           <Chip onClick={() => switchDemoUser(null)}>Sign out</Chip>
@@ -154,8 +154,8 @@ function DemoControls() {
       {demo.data?.steps && (
         <div className="space-y-2">
           <div className="text-xs font-semibold uppercase tracking-wide text-fg-faint">Read-aloud script</div>
-          {(["mayaRequest", "jordanOffer"] as const).map((k) => demo.data?.steps[k] && (
-            <blockquote key={k} className="rounded-xl bg-fg/5 px-3 py-2 text-sm"><span className="font-semibold mr-1.5">{k === "mayaRequest" ? "Maya:" : "Jordan:"}</span>“{demo.data.steps[k]!.text}”</blockquote>
+          {(["aadeeRequest", "jordanOffer"] as const).map((k) => demo.data?.steps[k] && (
+            <blockquote key={k} className="rounded-xl bg-fg/5 px-3 py-2 text-sm"><span className="font-semibold mr-1.5">{k === "aadeeRequest" ? "Aadee:" : "Jordan:"}</span>“{demo.data.steps[k]!.text}”</blockquote>
           ))}
         </div>
       )}

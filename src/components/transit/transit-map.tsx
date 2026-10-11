@@ -184,8 +184,8 @@ export function TransitMap({ theme, routes, stops, selectedId, onSelect, focus, 
       <button
         type="button"
         className={cn("absolute bottom-9 left-3 flex size-10 items-center justify-center rounded-full transition-colors hover:bg-bg-elev/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-carolina", busesEnabled ? "text-carolina" : "text-fg-muted")}
-        aria-label={busesEnabled ? "Hide demo 3D buses" : "Show demo 3D buses"}
-        title={busesEnabled ? "Hide demo 3D buses" : "Show demo 3D buses"}
+        aria-label={busesEnabled ? "Hide 3D buses" : "Show 3D buses"}
+        title={busesEnabled ? "Hide 3D buses" : "Show 3D buses"}
         aria-pressed={busesEnabled}
         onClick={() => setBusesEnabled((value) => !value)}
       >

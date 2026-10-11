@@ -27,8 +27,7 @@ export function AquaImpact({ className = "" }: { className?: string }) {
   const sync = useLive<Sync>("/api/sync", { interval: 6000, scopes: ["matches", "posts"] });
   const impact = sync.data?.counts.impact;
   if (!impact) return null;
-  const { completed, resolvedRequests, peopleHelped, demoCompleted, breakdown } = impact;
-  const real = completed - demoCompleted;
+  const { completed, resolvedRequests, peopleHelped, breakdown } = impact;
 
   return (
     <section aria-label="AquaImpact" className={`card p-4 ${className}`}>
@@ -45,11 +44,6 @@ export function AquaImpact({ className = "" }: { className?: string }) {
         Every completed borrow or shared resource keeps useful items circulating across campus
         {breakdown.total > 0 && <span className="text-mint font-medium"> — {sharedTitle(breakdown)}</span>}.
       </p>
-      {demoCompleted > 0 && (
-        <p className="mt-1.5 text-[11px] text-fg-faint">
-          {real === 0 ? "All completed exchanges so far involve demo posts." : `${demoCompleted} of ${completed} completed exchanges involve demo posts.`}
-        </p>
-      )}
     </section>
   );
 }

@@ -57,7 +57,7 @@ export function Providers({ children, initialTheme }: { children: ReactNode; ini
   const switchDemoUser = useCallback(async (id: string | null) => {
     await api.post("/api/demo/switch", { userId: id });
     await me.refresh();
-    toast.success(id ? "Switched demo profile" : "Signed out of demo profile");
+    toast.success(id ? "Signed in" : "Signed out");
   }, [me]);
 
   const session = useMemo<Session>(() => ({

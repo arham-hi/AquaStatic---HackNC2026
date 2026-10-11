@@ -2,10 +2,12 @@
 
 import { interpretQuery, composeAnswer, parsePost, type GroundingRecord } from "@/lib/ai";
 import { getLocation, LOCATIONS } from "@/lib/locations";
-import { fmtTime, fmtDay, HOUR } from "@/lib/time";
+import { fmtTime, fmtDay, HOUR, MINUTE } from "@/lib/time";
+import { requireUser } from "@/lib/session";
 import { listFeed, type FeedItem } from "./feed";
 import { toRecord } from "./briefings";
 import { loadTransit, OFFICIAL_TRACKING_URL } from "./transit";
+import { createPost, CreatePostSchema, type CreatePostInput } from "./posts";
 import type { ParseResult } from "@/lib/ai/types";
 import type { User } from "@/lib/db/schema";
 
@@ -16,6 +18,8 @@ export type AssistantReply = {
   provider: "gemini" | "local";
   intent: string;
   draft: ParseResult | null; // when the user seems to want to post something
+  posted: { id: string; title: string; href: string; matches: number } | null; // a post we just published for the user
+  awaiting: { context: string; missing: string[] } | null; // mid-draft: we asked for a detail and the next message completes it
   mapFocus: { lat: number; lng: number; label: string } | null;
 };
 
@@ -29,18 +33,108 @@ const say = (it: FeedItem, now: number) => {
   return `• ${who}${it.title}${where}${when}${demo}`;
 };
 
-export async function ask(user: User | null, question: string, now = Date.now()): Promise<AssistantReply> {
+// Intents that clearly mean "answer a question" — used to tell a topic change apart from
+// a short reply ("Davis", "in an hour") that completes the post we were already drafting.
+const RETRIEVAL_INTENTS = new Set(["whats_happening", "find_help", "find_offers", "events", "food", "transit", "news", "alerts"]);
+const QUESTIONY = /^(what|what'?s|who|where|when|which|how|any|is|are|do|does|show|list|tell me|can you tell|could you tell)\b|\?\s*$/i;
+const CANCEL = /^(?:nah|nope|no thanks?|never ?mind|nvm|forget it|cancel|stop|don'?t post|actually never mind)[.!\s]*$/i;
+
+const LOC_REQUIRED = new Set(["borrowing", "giveaway", "tutoring", "study", "lost_found", "free_food"]);
+
+/** What a human still has to supply before a parsed draft is publishable. */
+function missingFor(d: ParseResult): string[] {
+  const m = new Set<string>(d.missing);
+  if (LOC_REQUIRED.has(d.category) && !d.locationId) m.add("location");
+  if (d.locationId) m.delete("location");
+  if (d.category === "ride" && !d.destination) m.add("item");
+  if (d.type === "event" && d.startsInMinutes == null) m.add("time");
+  return [...m];
+}
+
+function toCreateInput(d: ParseResult, raw: string, now: number): CreatePostInput {
+  const startsAt = d.startsInMinutes != null ? now + d.startsInMinutes * MINUTE : undefined;
+  const expiry: Pick<CreatePostInput, "expiry" | "expiresAt"> = startsAt != null
+    ? { expiry: "custom", expiresAt: startsAt + Math.max(d.durationMinutes ?? 0, 60) * MINUTE }
+    : d.durationMinutes == null
+      ? { expiry: d.category === "lost_found" ? "today" : "1h" }
+      : { expiry: d.durationMinutes <= 30 ? "30m" : d.durationMinutes <= 75 ? "1h" : d.durationMinutes <= 200 ? "3h" : "today" };
+  return {
+    description: raw.trim().slice(0, 500), type: d.type, category: d.category,
+    title: d.title.trim().slice(0, 80), summary: d.summary.trim().slice(0, 200) || undefined,
+    locationId: d.locationId, locationNote: d.locationNote?.slice(0, 80) ?? null,
+    urgency: d.urgency, ...expiry, startsAt, keywords: d.keywords.slice(0, 12),
+    attributes: { item: d.item, subject: d.subject, powerClass: d.powerClass, durationMinutes: d.durationMinutes, destination: d.destination, lostOrFound: d.lostOrFound },
+  };
+}
+
+/**
+ * Turn a "post this for me" message into either a published post, a follow-up question
+ * for the one detail that's missing, or (channels only) a draft for explicit confirm.
+ */
+async function postFor(user: User | null, text: string, provider: "gemini" | "local", now: number, autoPublish: boolean): Promise<AssistantReply> {
+  const draft = await parsePost(text, now);
+  const loc = getLocation(draft.locationId);
+  const mapFocus = loc ? { lat: loc.lat, lng: loc.lng, label: loc.name } : null;
+  const p = draft.provider === "gemini" ? "gemini" : provider;
+  const kindLabel = draft.type === "event" ? "an event" : draft.type === "offer" ? "an offer" : draft.type === "request" ? "a request" : `a ${draft.type}`;
+
+  if (!autoPublish) {
+    return {
+      answer: `Sounds like you want to post ${draft.type === "offer" ? "an offer" : "a request"}: "${draft.title}". Review the details and confirm to publish it to the map.`,
+      sources: [], provider: p, intent: "create_post", draft, posted: null, awaiting: null, mapFocus,
+    };
+  }
+
+  const missing = missingFor(draft);
+  if (missing.length) {
+    const first = ["location", "time", "item"].find((k) => missing.includes(k))!;
+    const askQ = first === "location" ? (draft.type === "event" ? "Where on campus is it happening?" : "Where are you on campus?")
+      : first === "time" ? "When does it start? (\"tonight at 7\", \"in 2 hours\"…)"
+      : draft.category === "ride" ? "Where are you headed?" : "What exactly is the item?";
+    return {
+      answer: `On it — posting ${kindLabel}: "${draft.title}". One thing first: ${askQ}`,
+      sources: [], provider: p, intent: "create_post", draft, posted: null,
+      awaiting: { context: text.slice(0, 700), missing }, mapFocus,
+    };
+  }
+
+  const parsed = CreatePostSchema.safeParse(toCreateInput(draft, text, now));
+  if (!parsed.success) {
+    return {
+      answer: `I drafted "${draft.title}" but a couple of details need a human eye — open the editor to publish it.`,
+      sources: [], provider: p, intent: "create_post", draft, posted: null,
+      awaiting: { context: text.slice(0, 700), missing: [] }, mapFocus,
+    };
+  }
+  const me = user ?? (await requireUser());
+  const { post, matches } = await createPost(me, parsed.data, now);
+  const where = loc ? ` at ${loc.name}` : "";
+  const matched = matches.length ? ` It already matched ${matches.length} other post${matches.length > 1 ? "s" : ""}.` : "";
+  return {
+    answer: `Done — "${post.title}" is live on Connect${where}.${matched} If anything's off, undo it below or edit the post from Connect.`,
+    sources: [], provider: p, intent: "create_post", draft: null,
+    posted: { id: post.id, title: post.title, href: `/connect?post=${post.id}`, matches: matches.length },
+    awaiting: null, mapFocus,
+  };
+}
+
+export async function ask(
+  user: User | null, question: string,
+  opts: { draftContext?: string | null; autoPublish?: boolean; now?: number } = {},
+): Promise<AssistantReply> {
+  const now = opts.now ?? Date.now();
   const q = question.trim();
+  const prior = opts.draftContext?.trim() || null;
   const intent = await interpretQuery(q);
   const loc = getLocation(intent.locationId);
 
-  // A statement like "I need a charger at Davis" → prepare a draft, do not publish.
-  if (intent.intent === "create_post") {
-    const draft = await parsePost(q, now);
-    return {
-      answer: `Sounds like you want to post ${draft.type === "offer" ? "an offer" : "a request"}: "${draft.title}". Review the details and confirm to publish it to the map.`,
-      sources: [], provider: draft.provider, intent: intent.intent, draft, mapFocus: loc ? { lat: loc.lat, lng: loc.lng, label: loc.name } : null,
-    };
+  if (prior && CANCEL.test(q)) {
+    return { answer: "No problem — scrapped that draft. What else can I help with?", sources: [], provider: intent.provider, intent: "create_post", draft: null, posted: null, awaiting: null, mapFocus: null };
+  }
+  // Mid-draft: a follow-up that isn't clearly a new question continues the post we were building.
+  const continuing = !!prior && (intent.intent === "create_post" || (!RETRIEVAL_INTENTS.has(intent.intent) && !QUESTIONY.test(q)));
+  if (continuing || intent.intent === "create_post") {
+    return postFor(user, continuing ? `${prior}. ${q}` : q, intent.provider, now, !!opts.autoPublish);
   }
 
   // ---- retrieval tools ----
@@ -82,7 +176,7 @@ export async function ask(user: User | null, question: string, now = Date.now())
       const t = await loadTransit({}, now);
       const extra = t.mode === "gtfs" ? `Chapel Hill Transit schedule data lists ${t.routes.length} routes and ${t.stops.length} stops (feed: ${t.feedVersion}).` : "Live transit data is not loaded right now; showing a demo overlay only.";
       const answer = `${picked.length ? `Transit notices posted:\n${picked.map((i) => say(i, now)).join("\n")}\n\n` : "No transit notices are posted in Aqua Static right now. "}${extra} For live bus positions use the official tracker: ${OFFICIAL_TRACKING_URL}`;
-      return { answer, sources: picked.map(src), provider: intent.provider, intent: intent.intent, draft: null, mapFocus: null };
+      return { answer, sources: picked.map(src), provider: intent.provider, intent: intent.intent, draft: null, posted: null, awaiting: null, mapFocus: null };
     }
     case "near_location": picked = pool; heading = `Around ${loc?.name ?? "campus"}`; break;
     default: picked = pool.filter((i) => i.type !== "news" || i.at > now - 24 * HOUR); heading = loc ? `Around ${loc.name}` : "Happening on campus";
@@ -109,5 +203,5 @@ export async function ask(user: User | null, question: string, now = Date.now())
     answer = `${heading} (${picked.length}):\n${picked.map((i) => say(i, now)).join("\n")}${demoNote}`;
   }
   const focus = loc ? { lat: loc.lat, lng: loc.lng, label: loc.name } : picked[0]?.lat != null ? { lat: picked[0].lat!, lng: picked[0].lng!, label: picked[0].locationName ?? picked[0].title } : null;
-  return { answer, sources: picked.map(src), provider, intent: intent.intent, draft: null, mapFocus: focus };
+  return { answer, sources: picked.map(src), provider, intent: intent.intent, draft: null, posted: null, awaiting: null, mapFocus: focus };
 }

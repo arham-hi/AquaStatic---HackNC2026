@@ -1,7 +1,7 @@
 "use client";
 
 import { Radio } from "lucide-react";
-import { Badge, Card, EmptyState, Skeleton } from "@/components/ui/primitives";
+import { Card, EmptyState, Skeleton } from "@/components/ui/primitives";
 import { timeAgo } from "@/lib/time";
 import { cn } from "@/lib/utils";
 import { FORMATS, type ClientBriefing } from "./formats";
@@ -34,7 +34,6 @@ export function History({ briefings, loading, error, selectedId, onSelect }: {
                     <span className="block truncate text-sm font-medium">{b.title}</span>
                     <span className="flex items-center gap-1.5 text-[11px] text-fg-muted">
                       <span>{timeAgo(new Date(b.createdAt))}</span><span aria-hidden>·</span><span>{b.wordCount} words</span>
-                      {b.includesDemo && <Badge tone="amber" className="px-1.5 py-0 text-[10px]">DEMO</Badge>}
                     </span>
                   </span>
                 </button>

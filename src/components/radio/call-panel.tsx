@@ -63,7 +63,6 @@ export function CallPanel({ call }: { call: Call }) {
                   <span className="block truncate text-xs font-semibold">{c.title}</span>
                   <span className="flex items-center gap-1 text-[10px] text-fg-muted">
                     <Badge tone="neutral" className="capitalize">{c.kind}</Badge>
-                    {c.isDemo && <Badge tone="amber">DEMO</Badge>}
                     {c.at ? <span>{fmtTime(c.at)}</span> : null}
                   </span>
                 </span>

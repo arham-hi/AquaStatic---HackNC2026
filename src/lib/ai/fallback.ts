@@ -240,7 +240,7 @@ export function interpretQueryLocal(q: string): QueryIntent {
   const timeframe: QueryIntent["timeframe"] = /\btonight\b/.test(t) ? "tonight" : /\btoday\b/.test(t) ? "today" : /\bweek(end)?\b/.test(t) ? "week" : /\bnow\b|\brn\b|\bright now\b|\bcurrently\b/.test(t) ? "now" : "any";
   const keywords = keywordsOf(q);
   const intent: QueryIntent["intent"] =
-    /\bi (need|have|found|lost|can)\b|\bcan i post\b|\bpost (this|a|an)\b/.test(t) ? "create_post"
+    /\bi (need|have|found|lost|can)\b|\bi (want|wanna|would like) (to )?(borrow|post|make|create|host|throw|hold|start|organize)\b|\bi'?m (giving|offering|hosting|throwing|organizing|looking for)\b|\bcan i post\b|\bpost (this|that|a|an|my|it|something)\b|\b(post|create|make|add|schedule|list|put up|put on|announce)\b[^?]{0,50}\b(event|post|listing|request|offer|party|meetup|meeting|open mic|study|workshop|show|concert|sale|giveaway|board|connect|map)\b|\b(hosting|throwing|organizing|planning)\b[^?]{0,40}\b(party|event|meetup|meeting|session|open mic|show|game|fundraiser|drive|sale|dinner)\b|\bhelp me (post|create|write)\b/.test(t) ? "create_post"
       : /\bfree food\b|\bfood\b|\bpizza\b|\bsnacks?\b|\beat\b/.test(t) ? "food"
       : /\bbus\b|\btransit\b|\broute\b|\bshuttle\b/.test(t) ? "transit"
       : /\balerts?\b|\bsafety\b|\bemergency\b|\bclosed\b|\bclosure\b/.test(t) ? "alerts"

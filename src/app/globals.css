@@ -218,10 +218,6 @@ body {
 .marker[data-urgent="true"]::after {
   content: ""; position: absolute; inset: -2px; border-radius: 50%; border: 2px solid var(--pin, currentColor); animation: pulse-ring 1.6s ease-out infinite;
 }
-.marker[data-demo="true"]::before {
-  content: "DEMO"; position: absolute; top: -9px; right: -14px; font-size: 8px; font-weight: 800; letter-spacing: 0.04em; padding: 1px 4px; border-radius: 6px;
-  background: var(--amber); color: #1a1200; border: 1px solid rgba(255,255,255,0.8);
-}
 .marker svg { width: 16px; height: 16px; position: relative; }
 .marker .shine { position: absolute; inset: 0; border-radius: 50%; background: radial-gradient(circle at 32% 26%, rgba(255,255,255,0.75) 0%, rgba(255,255,255,0.25) 22%, rgba(255,255,255,0) 50%); pointer-events: none; }
 .marker-glow { animation: pulse-ring 1.2s ease-out 3; }

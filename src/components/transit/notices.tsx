@@ -3,7 +3,7 @@
 import { Megaphone, ExternalLink } from "lucide-react";
 import type { Post } from "@/lib/db/schema";
 import { OFFICIAL_ROUTES_URL } from "@/lib/constants";
-import { Badge, Card, EmptyState } from "@/components/ui/primitives";
+import { Card, EmptyState } from "@/components/ui/primitives";
 import { timeAgo, timeUntil } from "@/lib/time";
 
 export function Notices({ notices }: { notices: Post[] }) {
@@ -21,7 +21,6 @@ export function Notices({ notices }: { notices: Post[] }) {
             <Card key={n.id} className="flex flex-col gap-1.5 animate-rise">
               <div className="flex items-start justify-between gap-2">
                 <div className="font-medium leading-snug">{n.title}</div>
-                {n.isDemo && <Badge tone="amber">DEMO</Badge>}
               </div>
               <p className="text-sm text-fg-muted">{n.summary}</p>
               <div className="text-[11px] text-fg-faint mt-auto pt-1">

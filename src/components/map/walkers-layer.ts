@@ -5,6 +5,7 @@
 import * as THREE from "three";
 import maplibregl from "@/lib/maplibre";
 import { CAMPUS_CENTER } from "@/lib/locations";
+import { softShadowTexture } from "@/lib/soft-shadow";
 
 export const WALKERS_LAYER_ID = "aero-walkers";
 const COUNT = 70;                 // how many people
@@ -65,9 +66,12 @@ function pointAt(line: Line, d: number) {
 function createWalkersLayer(lines: Line[], origin: maplibregl.MercatorCoordinate, units: number) {
   const scene = new THREE.Scene();
   const camera = new THREE.Camera();
-  scene.add(new THREE.HemisphereLight("#ffffff", "#8aa0b5", 1.6));
-  const sun = new THREE.DirectionalLight("#fff4da", 1.4);
+  scene.add(new THREE.HemisphereLight("#ffffff", "#c4d9e8", 1.9));
+  const sun = new THREE.DirectionalLight("#fff4da", 1.2);
   sun.position.set(-80, 150, -100); scene.add(sun);
+  // Fill from the camera-facing side so the unlit side of each person stays colorful, not black.
+  const fill = new THREE.DirectionalLight("#cfeaff", 0.85);
+  fill.position.set(120, 60, 150); scene.add(fill);
   const transform = new THREE.Matrix4().makeTranslation(origin.x, origin.y, origin.z)
     .multiply(new THREE.Matrix4().makeScale(units, -units, units))
     .multiply(new THREE.Matrix4().makeRotationX(Math.PI / 2));
@@ -76,15 +80,17 @@ function createWalkersLayer(lines: Line[], origin: maplibregl.MercatorCoordinate
   const geo = {
     torso: new THREE.CapsuleGeometry(0.24, 0.42, 6, 14),
     head: new THREE.SphereGeometry(0.3, 16, 12),
-    leg: new THREE.CapsuleGeometry(0.085, 0.58, 4, 10).translate(0, -0.35, 0),
+    leg: new THREE.CapsuleGeometry(0.085, 0.66, 4, 10).translate(0, -0.41, 0),
     arm: new THREE.CapsuleGeometry(0.06, 0.4, 4, 10).translate(0, -0.24, 0),
   };
-  // Pearlescent gummy material: slightly translucent, high gloss, a rim of white sheen.
-  const mats = new Map<string, THREE.MeshPhysicalMaterial>();
+  // Gummy Frutiger Aero material: bright, glossy, slightly translucent-looking without
+  // relying on transparency (MeshPhysicalMaterial renders almost black in the shared
+  // maplibre GL context — its clearcoat/sheen lighting breaks down there).
+  const mats = new Map<string, THREE.MeshPhongMaterial>();
   const mat = (c: string) => {
     let m = mats.get(c);
     if (!m) {
-      m = new THREE.MeshPhysicalMaterial({ color: c, transparent: true, opacity: 0.82, roughness: 0.18, metalness: 0, clearcoat: 1, clearcoatRoughness: 0.25, sheen: 0.6, sheenColor: new THREE.Color("#e8fbff"), emissive: c, emissiveIntensity: 0.12 });
+      m = new THREE.MeshPhongMaterial({ color: c, shininess: 90, specular: new THREE.Color("#dff6ff"), emissive: c, emissiveIntensity: 0.32 });
       mats.set(c, m);
     }
     return m;
@@ -92,6 +98,11 @@ function createWalkersLayer(lines: Line[], origin: maplibregl.MercatorCoordinate
   const mesh = (g: THREE.BufferGeometry, m: THREE.Material, x: number, y: number, z: number, parent: THREE.Object3D) => {
     const o = new THREE.Mesh(g, m); o.position.set(x, y, z); parent.add(o); return o;
   };
+
+  // Soft contact shadow: a flat gradient disc pinned to the ground under each walker.
+  // No shadow maps — this is cheap, translucent, and keeps feet feeling grounded.
+  const shadowGeo = new THREE.CircleGeometry(0.5, 24).rotateX(-Math.PI / 2);
+  const shadowMat = new THREE.MeshBasicMaterial({ map: softShadowTexture(), transparent: true, depthWrite: false });
 
   const rand = rng(2026);
   const pick = <T,>(a: T[]) => a[Math.floor(rand() * a.length)];
@@ -106,8 +117,10 @@ function createWalkersLayer(lines: Line[], origin: maplibregl.MercatorCoordinate
     const legs = [-0.11, 0.11].map((x) => { const p = new THREE.Group(); p.position.set(x, 0.84, 0); g.add(p); mesh(geo.leg, body, 0, 0, 0, p); return p; });
     const arms = [-0.3, 0.3].map((x) => { const p = new THREE.Group(); p.position.set(x, 1.4, 0); g.add(p); mesh(geo.arm, body, 0, 0, 0, p); return p; });
     scene.add(g);
+    const shadow = new THREE.Mesh(shadowGeo, shadowMat);
+    scene.add(shadow);
     const line = chooseLine();
-    return { g, legs, arms, line, dist: rand() * line.length, dir: rand() < 0.5 ? 1 : -1, speed: 1.1 + rand() * 0.7, phase: rand() * 6, heading: 0 };
+    return { g, shadow, legs, arms, line, dist: rand() * line.length, dir: rand() < 0.5 ? 1 : -1, speed: 1.1 + rand() * 0.7, phase: rand() * 6, heading: 0 };
   });
 
   let renderer: THREE.WebGLRenderer;
@@ -128,16 +141,21 @@ function createWalkersLayer(lines: Line[], origin: maplibregl.MercatorCoordinate
       previous = now;
       const zoom = map.getZoom();
       const show = zoom >= 14.4;
-      // Same exaggeration idea as the 3D buses: people stay visible when zoomed out.
-      const scale = 7 * Math.min(12, Math.max(1, 2 ** (16.2 - zoom)));
+      // Zoom-aware exaggeration: people stay much larger than life so they read at the
+      // default campus view, then ease back toward sane sizes as you zoom in.
+      const scale = Math.min(65, Math.max(5.5, 30 * 2 ** ((15.6 - zoom) * 0.5)));
       for (const w of walkers) {
         w.g.visible = show;
+        w.shadow.visible = show;
         if (!show) continue;
         w.dist += w.dir * w.speed * dt;
         if (w.dist <= 0) { w.dist = 0; w.dir = 1; } else if (w.dist >= w.line.length) { w.dist = w.line.length; w.dir = -1; }
         const p = pointAt(w.line, w.dist);
         const fx = p.dx * w.dir, fz = p.dz * w.dir; // facing direction
-        w.g.position.set(p.x - fz * w.line.offset, 0.05 + Math.abs(Math.sin(w.phase)) * 0.04 * scale, p.z + fx * w.line.offset);
+        const x = p.x - fz * w.line.offset, z = p.z + fx * w.line.offset;
+        w.g.position.set(x, 0.02 + Math.abs(Math.sin(w.phase)) * 0.03 * scale, z);
+        w.shadow.position.set(x, 0.06, z);
+        w.shadow.scale.setScalar(scale);
         const target = Math.atan2(-fx, -fz);
         const delta = Math.atan2(Math.sin(target - w.heading), Math.cos(target - w.heading));
         w.heading += delta * Math.min(1, dt * 8 + (dt === 0 ? 1 : 0));
@@ -156,6 +174,8 @@ function createWalkersLayer(lines: Line[], origin: maplibregl.MercatorCoordinate
     },
     onRemove() {
       Object.values(geo).forEach((g) => g.dispose());
+      shadowGeo.dispose();
+      shadowMat.dispose();
       mats.forEach((m) => m.dispose());
       renderer?.dispose();
     },

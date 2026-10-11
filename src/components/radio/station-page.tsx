@@ -12,7 +12,9 @@ import { timeAgo, fmtTime } from "@/lib/time";
 import { AquaMascot } from "./mascot/aqua-mascot";
 import { KIND_LABEL, useStation, type StationSegment } from "./use-station";
 import { useCall } from "./use-call";
+import { useDemoVoice } from "./use-demo-voice";
 import { CallPanel } from "./call-panel";
+import { DemoVoicePanel } from "./demo-voice-panel";
 import { Visualizer } from "./visualizer";
 
 // "Hey Aqua" / "Okay Aqua" — opt-in hands-free wake word. Runs a dedicated recognition session
@@ -60,7 +62,6 @@ function NowTalkingAbout({ seg }: { seg: StationSegment }) {
         <span className="block truncate text-sm font-semibold">{src.title}</span>
         <span className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px] text-fg-muted">
           <Badge tone="neutral" className="capitalize">{src.kind}</Badge>
-          {src.isDemo && <Badge tone="amber">DEMO</Badge>}
           {src.at ? <span>{fmtTime(src.at)}</span> : null}
         </span>
       </span>
@@ -76,11 +77,20 @@ function NowTalkingAbout({ seg }: { seg: StationSegment }) {
 export function StationPage() {
   const st = useStation();
   const call = useCall({ suspend: st.suspendStation, resume: st.resumeStation, emitFx: st.emitFx });
+  // Demo-video only: scripted voice lines. Inert unless dev mode + ?demoVoice=1.
+  const demoVoice = useDemoVoice({ suspend: st.suspendStation, resume: st.resumeStation });
+  const [demoControls, setDemoControls] = useState(false);
+  useEffect(() => {
+    setDemoControls(process.env.NODE_ENV !== "production" && new URLSearchParams(window.location.search).get("demoVoice") === "1");
+  }, []);
+  const stopDemo = demoVoice.stop;
+  // A live call takes the voice path — stop any scripted clip so they never overlap.
+  useEffect(() => { if (call.active) stopDemo(); }, [call.active, stopDemo]);
   const kickRef = useRef(0);
   const talking = st.speaking && st.current;
   const [handsFree, setHandsFree] = useState(false);
   // Wake word only listens while music is playing and no call is active — never during speech.
-  useWakeWord(handsFree, st.status === "music" && !call.active, () => void call.startCall());
+  useWakeWord(handsFree, st.status === "music" && !call.active && !demoVoice.playing, () => void call.startCall());
   const [, setTick] = useState(0); // 1s heartbeat for the "next update" countdown
   useEffect(() => {
     if (!st.tunedIn) return;
@@ -88,10 +98,10 @@ export function StationPage() {
     return () => clearInterval(t);
   }, [st.tunedIn]);
 
-  const mascotState = call.active ? call.mascot : st.mascot;
-  const mascotLevels = call.active ? call.levelsRef : st.levelsRef;
+  const mascotState = demoVoice.playing ? "talking" : call.active ? call.mascot : st.mascot;
+  const mascotLevels = demoVoice.playing ? demoVoice.levelsRef : call.active ? call.levelsRef : st.levelsRef;
 
-  const statusLabel = call.active ? "Live call" : !st.tunedIn ? "Off air"
+  const statusLabel = demoVoice.playing ? "Aqua is speaking" : call.active ? "Live call" : !st.tunedIn ? "Off air"
     : st.status === "tuning" ? "Tuning in…"
     : st.muted ? "Muted"
     : talking ? "Aqua is speaking"
@@ -200,6 +210,8 @@ export function StationPage() {
         </div>
       </section>
 
+      {demoControls && <DemoVoicePanel demo={demoVoice} disabled={call.active} />}
+
       {st.audioError && (
         <p className="mt-2 flex items-center gap-1.5 text-xs text-amber" role="alert">
           <Badge tone="amber">Audio error</Badge> {st.audioError}
@@ -221,7 +233,6 @@ export function StationPage() {
           {talking && (
             <div className="mt-2 flex flex-wrap items-center gap-1.5">
               <Badge tone={KIND_TONE[st.current!.kind]}>{KIND_LABEL[st.current!.kind]}</Badge>
-              {st.current!.includesDemo && <Badge tone="amber">Includes demo data</Badge>}
             </div>
           )}
         </section>
@@ -257,7 +268,6 @@ export function StationPage() {
                   <p className="text-[11px] text-fg-faint">
                     {s.title} · {timeAgo(s.createdAt)}
                     {s.audioProvider === "elevenlabs" ? " · studio voice" : ""}
-                    {s.includesDemo ? " · demo" : ""}
                   </p>
                 </div>
               </li>

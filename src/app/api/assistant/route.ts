@@ -11,6 +11,9 @@ export const POST = route(async (req) => {
   const ip = req.headers.get("x-forwarded-for") ?? "local";
   const rl = rateLimit(`ask:${me?.id ?? ip}`, 30, 60_000);
   if (!rl.ok) throw new ApiError(429, "Too many questions at once. Give it a few seconds.");
-  const { question } = await parseBody(req, z.object({ question: z.string().trim().min(2).max(400) }));
-  return json(await ask(me, question));
+  const { question, draftContext } = await parseBody(req, z.object({
+    question: z.string().trim().min(2).max(400),
+    draftContext: z.string().trim().max(800).optional(), // set while we're mid-draft so short replies complete the post
+  }));
+  return json(await ask(me, question, { draftContext, autoPublish: true }));
 });

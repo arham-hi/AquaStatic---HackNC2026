@@ -167,6 +167,33 @@ describe("digest and assistant from actual records (no Gemini key)", () => {
     const draft = await ask(maya, "I need a phone charger at the Union for 20 minutes");
     expect(draft.draft?.type).toBe("request");
   });
+  it("auto-publish: asks for the missing detail, then posts to Connect", async () => {
+    const a1 = await ask(maya, "I need to borrow a USB-C charger", { autoPublish: true });
+    expect(a1.posted).toBeNull();
+    expect(a1.awaiting?.missing).toContain("location");
+
+    const a2 = await ask(maya, "Davis Library", { draftContext: a1.awaiting!.context, autoPublish: true });
+    expect(a2.posted?.href).toBe(`/connect?post=${a2.posted!.id}`);
+    const stored = (await listPosts()).find((p) => p.id === a2.posted!.id);
+    expect(stored).toMatchObject({ type: "request", category: "borrowing", locationId: "davis-library", authorId: maya.id });
+  });
+  it("auto-publish: an event with enough detail posts immediately", async () => {
+    const e = await ask(maya, "Post an open mic event at the Pit tomorrow at 7", { autoPublish: true });
+    expect(e.posted).toBeTruthy();
+    const stored = (await listPosts()).find((p) => p.id === e.posted!.id);
+    expect(stored?.type).toBe("event");
+    expect(stored?.locationId).toBe("the-pit");
+    expect(stored!.startsAt!.getTime()).toBeGreaterThan(Date.now());
+    expect(stored!.expiresAt!.getTime()).toBeGreaterThanOrEqual(stored!.startsAt!.getTime());
+  });
+  it("auto-publish: a clear new question drops the pending draft", async () => {
+    const a1 = await ask(maya, "I need an umbrella", { autoPublish: true });
+    expect(a1.awaiting).toBeTruthy();
+    const a2 = await ask(maya, "Any free food on campus?", { draftContext: a1.awaiting!.context, autoPublish: true });
+    expect(a2.intent).toBe("food");
+    expect(a2.posted).toBeNull();
+    expect(a2.awaiting).toBeNull();
+  });
 });
 
 describe("missing credentials never break core flows", () => {

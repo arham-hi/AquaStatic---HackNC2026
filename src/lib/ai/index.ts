@@ -52,7 +52,7 @@ export async function interpretQuery(q: string): Promise<QueryIntent & { provide
   if (!hasGemini()) return { ...local, provider: "local" };
   try {
     const ai = await generateJson(
-      `Classify this question to the campus assistant. intents: whats_happening (general), find_help (who needs help / open requests), find_offers (who can help / has an item), events, food, transit, news, alerts, near_location (asks about a place), create_post (user wants to post a request/offer), unknown.\nQuestion: ${JSON.stringify(q)}`,
+      `Classify this question to the campus assistant. intents: whats_happening (general), find_help (who needs help / open requests), find_offers (who can help / has an item), events, food, transit, news, alerts, near_location (asks about a place), create_post (user wants to post something — a request, offer, event, announcement; e.g. "i need a charger", "post an event", "i'm hosting a study session"), unknown.\nQuestion: ${JSON.stringify(q)}`,
       QueryIntentSchema,
       { system: SYSTEM, temperature: 0 },
     );

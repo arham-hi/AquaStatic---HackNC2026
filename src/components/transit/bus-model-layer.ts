@@ -3,6 +3,7 @@
 import * as THREE from "three";
 import maplibregl from "@/lib/maplibre";
 import { CAMPUS_CENTER } from "@/lib/locations";
+import { softShadowTexture } from "@/lib/soft-shadow";
 import { busHeading, busPosition, individualBusJourney, type BusJourney } from "./simulated-buses";
 
 export const BUS_LAYER_ID = "simulated-3d-buses";
@@ -71,10 +72,17 @@ function createBus(route: BusJourney["route"]) {
   context.fillStyle = "#111c23"; context.fillRect(0, 0, 256, 64);
   context.fillStyle = "#ffda80"; context.font = "bold 40px sans-serif";
   context.textAlign = "center"; context.textBaseline = "middle";
-  context.fillText(`${route.shortName} · DEMO`, 128, 34, 240);
+  context.fillText(`${route.shortName}`, 128, 34, 240);
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
   box([2.3, 0.4, 0.07], [0, 3.07, -5.98], new THREE.MeshBasicMaterial({ map: texture }));
+  // Soft contact shadow hugging the road, so bigger buses still feel grounded.
+  const shadow = new THREE.Mesh(
+    new THREE.PlaneGeometry(4.6, 14.4).rotateX(-Math.PI / 2),
+    new THREE.MeshBasicMaterial({ map: softShadowTexture(), transparent: true, depthWrite: false }),
+  );
+  shadow.position.y = 0;
+  group.add(shadow);
   return { group, wheels };
 }
 
@@ -111,7 +119,10 @@ export function createBusModelLayer(journeys: BusJourney[], clock: { current: nu
       const elapsed = Math.min((now - previous) / 1000, 0.1);
       if (!reducedMotion) clock.current += elapsed;
       previous = now;
-      const scale = 2.5 * Math.min(16, Math.max(1, 2 ** (16 - map.getZoom())));
+      // Zoom-aware exaggeration: ~2.3x larger than before at the default view, easing back
+      // toward near-scale when zoomed in and staying chunky when zoomed out.
+      const zoom = map.getZoom();
+      const scale = Math.min(24, Math.max(3, 7 * 2 ** ((15.8 - zoom) * 0.55)));
       for (const bus of buses) {
         const position = busPosition(bus.journey, clock.current + bus.offset);
         const distance = Math.hypot(
