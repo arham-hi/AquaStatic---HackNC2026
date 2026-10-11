@@ -5,6 +5,7 @@ import { getDb, schema } from "@/lib/db/client";
 import { newId } from "@/lib/ids";
 import { bump } from "@/lib/realtime";
 import { getLocation } from "@/lib/locations";
+import { REUSE_CATEGORIES } from "@/lib/categories";
 import { endOfCampusDay, HOUR, MINUTE } from "@/lib/time";
 import { ApiError } from "@/lib/api";
 import { POST_CATEGORIES, POST_TYPES, URGENCIES, type Post, type PostStatus, type User } from "@/lib/db/schema";
@@ -181,8 +182,7 @@ export async function sweepExpirations(now = Date.now()) {
   return res.count;
 }
 
-export { REUSE_CATEGORIES } from "@/lib/categories";
-import { REUSE_CATEGORIES } from "@/lib/categories";
+export { REUSE_CATEGORIES };
 
 /** Completed connections that kept an existing item in use (borrowed, returned, shared, eaten instead of binned). A count, never a savings claim. */
 export type SharedBreakdown = { total: number; borrowed: number; rehomed: number; returned: number; rides: number; food: number };
