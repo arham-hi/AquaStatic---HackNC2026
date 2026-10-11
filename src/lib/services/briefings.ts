@@ -8,7 +8,7 @@ import { bump } from "@/lib/realtime";
 import { hasElevenLabs } from "@/lib/env";
 import { fmtTime, fmtDay, greeting, HOUR } from "@/lib/time";
 import { composeBriefingScript, type GroundingRecord } from "@/lib/ai";
-import { listFeed, type FeedItem } from "./feed";
+import { listFeed, matchesInterest, type FeedItem } from "./feed";
 import { sharedBreakdown, sharedSummary } from "./posts";
 import { BRIEFING_FORMATS, type Briefing, type BriefingFormat, type BriefingSegment, type BriefingSourceRef, type User } from "@/lib/db/schema";
 
@@ -24,25 +24,6 @@ export const GenerateBriefingSchema = z.object({
 export type GenerateBriefingInput = z.infer<typeof GenerateBriefingSchema>;
 
 const FORMAT_TITLES: Record<BriefingFormat, string> = { flash: "Campus Flash", radio: "Aqua Static Radio", podcast: "Deep Dive", digest: "Text Digest", letter: "Your Carolina Letter", station: "Aqua FM" };
-
-function matchesInterest(it: FeedItem, interests: string[]): boolean {
-  if (!interests.length) return true;
-  const t = `${it.title} ${it.summary}`.toLowerCase();
-  return interests.some((i) => {
-    switch (i) {
-      case "academics": return ["tutoring", "study"].includes(it.category) || /\blecture\b|\bseminar\b|\bresearch\b|\bexam\b/.test(t);
-      case "social": return it.type === "event" && !/\bcareer\b|\blecture\b/.test(t);
-      case "free_food": return it.category === "free_food" || /\bfood\b|\bpizza\b/.test(t);
-      case "sports": return /\bgame\b|\bbasketball\b|\bfootball\b|\bsoccer\b|\btar heels\b|\bathletic/.test(t);
-      case "career": return /\bcareer\b|\binternship\b|\bjob\b|\bhiring\b|\bresume\b|\bnetworking\b/.test(t);
-      case "community": return it.type === "request" || it.type === "offer" || it.category === "lost_found";
-      case "transit": return it.category === "transit" || it.type === "notice";
-      case "news": return it.type === "news";
-      case "culture": return /\bart\b|\bmusic\b|\bconcert\b|\btheat|\bperformance\b|\bfilm\b|\bmuseum\b/.test(t);
-      default: return false;
-    }
-  });
-}
 
 export function toRecord(it: FeedItem): GroundingRecord {
   const when = it.startsAt ? `${fmtDay(it.startsAt)} ${fmtTime(it.startsAt)}` : `posted ${fmtTime(it.at)}`;

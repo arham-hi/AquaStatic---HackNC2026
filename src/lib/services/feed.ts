@@ -74,9 +74,29 @@ export const FEED_WINDOWS = ["recent", "today", "upcoming", "all"] as const;
 export type FeedWindow = (typeof FEED_WINDOWS)[number];
 
 export type FeedQuery = {
-  filter?: FeedFilter; window?: FeedWindow; q?: string; locationId?: string;
+  filter?: FeedFilter; window?: FeedWindow; q?: string; locationId?: string; interests?: string[];
   near?: { lat: number; lng: number; meters: number }; limit?: number; offset?: number; includeExternal?: boolean;
 };
+
+/** Does an item match the user's stated interests? Shared by the feed ranker and radio briefings. */
+export function matchesInterest(it: FeedItem, interests: string[]): boolean {
+  if (!interests.length) return true;
+  const t = `${it.title} ${it.summary}`.toLowerCase();
+  return interests.some((i) => {
+    switch (i) {
+      case "academics": return ["tutoring", "study"].includes(it.category) || /\blecture\b|\bseminar\b|\bresearch\b|\bexam\b/.test(t);
+      case "social": return it.type === "event" && !/\bcareer\b|\blecture\b/.test(t);
+      case "free_food": return it.category === "free_food" || /\bfood\b|\bpizza\b/.test(t);
+      case "sports": return /\bgame\b|\bbasketball\b|\bfootball\b|\bsoccer\b|\btar heels\b|\bathletic/.test(t);
+      case "career": return /\bcareer\b|\binternship\b|\bjob\b|\bhiring\b|\bresume\b|\bnetworking\b/.test(t);
+      case "community": return it.type === "request" || it.type === "offer" || it.category === "lost_found";
+      case "transit": return it.category === "transit" || it.type === "notice";
+      case "news": return it.type === "news";
+      case "culture": return /\bart\b|\bmusic\b|\bconcert\b|\btheat|\bperformance\b|\bfilm\b|\bmuseum\b/.test(t);
+      default: return false;
+    }
+  });
+}
 
 async function authorsFor(posts: Post[]) {
   const ids = Array.from(new Set(posts.map((p) => p.authorId).filter(Boolean) as string[]));
@@ -136,7 +156,10 @@ export async function listFeed(qy: FeedQuery = {}, now = Date.now()): Promise<{ 
   // Sort: urgent alerts first, then community posts by recency interleaved with soonest events.
   // Fresh alerts first, then community posts, then everything else. Old alerts fall back into the stream.
   const rank = (it: FeedItem) => (it.type === "alert" && it.at > now - 2 * DAY ? 0 : it.kind === "post" ? 1 : 2);
-  items.sort((a, b) => rank(a) - rank(b) || (a.kind === "external" && a.type === "event" && b.kind === "external" && b.type === "event" ? a.at - b.at : b.at - a.at));
+  const interests = qy.interests ?? [];
+  // Personalization is a tiebreak inside each rank bucket — it never hides or suppresses anything.
+  const pref = (it: FeedItem) => (interests.length && matchesInterest(it, interests) ? 0 : 1);
+  items.sort((a, b) => rank(a) - rank(b) || pref(a) - pref(b) || (a.kind === "external" && a.type === "event" && b.kind === "external" && b.type === "event" ? a.at - b.at : b.at - a.at));
 
   const total = items.length;
   const offset = qy.offset ?? 0;
