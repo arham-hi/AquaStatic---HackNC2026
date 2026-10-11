@@ -8,7 +8,8 @@ import { api } from "@/lib/client";
 import { onChange } from "@/hooks/useLive";
 
 export type StationKind = "alert" | "update" | "event_soon" | "roundup" | "time_check" | "welcome";
-export type MascotState = "idle" | "tuning" | "music" | "talking" | "alert" | "muted";
+export type StationStatus = "off_air" | "tuning" | "speaking" | "music";
+export type MascotState = "idle" | "tuning" | "music" | "talking" | "alert" | "muted" | "listening" | "thinking" | "error";
 
 export type SegmentSource = { kind: string; id: string; title: string; href: string; at: number | null; isDemo: boolean };
 
@@ -46,9 +47,12 @@ const RAMP = 0.4;
 
 const WELCOME: StationSegment = {
   id: "welcome", kind: "welcome", title: "Sign on",
-  text: "You're tuned into Aqua Static — Chapel Hill's campus, live. I'll jump in the moment something happens.",
-  sources: [], includesDemo: false, audioProvider: "browser", wordCount: 19, createdAt: "",
+  text: "Hey Tar Heels! You're listening to Aqua FM, your campus companion. Let's see what's happening around Chapel Hill!",
+  sources: [], includesDemo: false, audioProvider: "browser", wordCount: 20, createdAt: "",
 };
+
+/** Segments younger than this are still "live" — a listener tuning in now should hear them. */
+const FRESH_SEGMENT_MS = 4 * 60 * 1000;
 
 const hasTts = () => typeof window !== "undefined" && "speechSynthesis" in window && "SpeechSynthesisUtterance" in window;
 const sentences = (t: string) => t.split(/(?<=[.!?…])\s+/).map((s) => s.trim()).filter(Boolean);
@@ -71,6 +75,9 @@ export function useStation() {
   const [voiceMode, setVoiceMode] = useState<"mp3" | "tts" | "text" | null>(null);
   const [musicAnalyser, setMusicAnalyser] = useState<AnalyserNode | null>(null);
   const [tuning, setTuning] = useState(false);
+  const [audioError, setAudioError] = useState<string | null>(null);
+  const [queueLength, setQueueLength] = useState(0);
+  const lastPollAtRef = useRef(0);
 
   // Everything the 3D mascot reads per frame — refs, not state, so animation never re-renders React.
   const levelsRef = useRef<StationLevels>({ voice: 0, music: 0 });
@@ -84,6 +91,8 @@ export function useStation() {
   const pumpingRef = useRef(false);
   const cancelPlaybackRef = useRef<(() => void) | null>(null);
   const tunedRef = useRef(false);
+  const suspendedRef = useRef(false); // a live call parked the station — pump waits, queue preserved
+  const currentRef = useRef<StationSegment | null>(null);
   const mutedRef = useRef(false);
   const ttsSpeakingRef = useRef(false);
   const mp3PlayingRef = useRef(false);
@@ -173,11 +182,17 @@ export function useStation() {
     const voice = pickVoice();
     let idx = 0;
     let finished = false;
+    let started = false;
+    let errs = 0;
     const done = () => {
       if (finished) return;
       finished = true;
       clearTimeout(watchdog);
       ttsSpeakingRef.current = false;
+      // Nothing ever started despite errors → the engine is blocked, not just a bad sentence.
+      if (!started && errs > 0 && gen === genRef.current) {
+        setAudioError("Speech was blocked by the browser — check sound/voice settings. Transcripts stay live.");
+      }
       resolve();
     };
     cancelPlaybackRef.current = () => { synth.cancel(); done(); };
@@ -191,14 +206,16 @@ export function useStation() {
       u.rate = 1;
       u.pitch = 1.08; // a touch brighter — it's Aqua's voice
       u.volume = mutedRef.current ? 0 : 1;
-      u.onstart = () => { if (gen === genRef.current) ttsSpeakingRef.current = true; };
+      u.onstart = () => { if (gen === genRef.current) { started = true; ttsSpeakingRef.current = true; } };
       u.onboundary = () => { if (gen === genRef.current) kickRef.current = performance.now(); };
       u.onend = () => { if (gen === genRef.current && !finished) next(); };
       u.onerror = (e) => {
         if (e.error === "interrupted" || e.error === "canceled") { done(); return; }
+        errs++;
         if (gen === genRef.current && !finished) next();
       };
       utterRef.current.push(u); // Chrome GCs unattached utterances and never fires events
+      synth.resume(); // some engines park in paused state after a cancel()
       synth.speak(u);
     };
     setVoiceMode("tts");
@@ -217,9 +234,12 @@ export function useStation() {
     pumpingRef.current = true;
     try {
       for (;;) {
+        if (suspendedRef.current) { setCurrent(null); currentRef.current = null; setSpeaking(false); return; }
         const seg = queueRef.current.shift();
-        if (!seg) { setCurrent(null); setSpeaking(false); duckMusic(false); return; }
+        setQueueLength(queueRef.current.length);
+        if (!seg) { setCurrent(null); currentRef.current = null; setSpeaking(false); duckMusic(false); return; }
         setCurrent(seg);
+        currentRef.current = seg;
         setSpeaking(true);
         duckMusic(true);
         if (seg.kind !== "alert" && seg.kind !== "time_check") emitFx(/found|matched|resolved|picked up|thanks|won|free food/i.test(seg.text) ? "celebrate" : "bounce");
@@ -236,6 +256,7 @@ export function useStation() {
       ttsSpeakingRef.current = false;
       setSpeaking(false);
       setCurrent(null);
+      currentRef.current = null;
       duckMusic(false);
     }
   }, [duckMusic, emitFx, playMp3, readSilently, speakSegment, stopVoiceElement]);
@@ -244,7 +265,10 @@ export function useStation() {
     const fresh = segs.filter((s) => !seenRef.current.has(s.id));
     for (const s of fresh) seenRef.current.add(s.id);
     if (!fresh.length) return;
-    queueRef.current.push(...fresh);
+    // Official alerts jump to the front of the line (never interrupting what's already speaking).
+    queueRef.current.push(...fresh.filter((s) => s.kind !== "alert"));
+    queueRef.current.unshift(...fresh.filter((s) => s.kind === "alert"));
+    setQueueLength(queueRef.current.length);
     void pump();
   }, [pump]);
 
@@ -255,6 +279,7 @@ export function useStation() {
       try {
         const r = await api.get<StationResponse>(`/api/station?after=${lastIdRef.current ?? ""}`);
         if (dead) return;
+        lastPollAtRef.current = Date.now();
         setRecent(r.recent);
         if (!tunedRef.current) { lastIdRef.current = r.latest; return; } // skip backlog; tuning in joins live
         if (r.segments.length) {
@@ -309,9 +334,13 @@ export function useStation() {
   // ---------- controls ----------
   const tuneIn = useCallback(async () => {
     if (tunedRef.current) return;
+    // Speech is the point of the station — say so immediately if this browser can't do it.
+    if (!hasTts()) setAudioError("This browser can't speak — Aqua will show transcripts instead. Try Chrome, Edge or Safari for full audio.");
+    else window.speechSynthesis.getVoices(); // prime the voice list inside the user gesture
     const Ctx = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
     if (Ctx) {
       const ctx = new Ctx();
+      void ctx.resume(); // some browsers open suspended even inside a gesture
       const mGain = ctx.createGain();
       const mAn = ctx.createAnalyser();
       const vGain = ctx.createGain();
@@ -338,9 +367,21 @@ export function useStation() {
     emitFx("bounce");
     seenRef.current.add(WELCOME.id);
     enqueue([WELCOME]);
+    // Right behind the welcome: the freshest real segment (a server plan runs inside this GET too).
+    void api.get<StationResponse>(`/api/station?after=${lastIdRef.current ?? ""}`)
+      .then((r) => {
+        lastPollAtRef.current = Date.now();
+        setRecent(r.recent);
+        const playNow = r.segments.length ? r.segments : r.recent.filter((s) => Date.now() - new Date(s.createdAt).getTime() < FRESH_SEGMENT_MS).slice(0, 1);
+        if (r.segments.length) lastIdRef.current = r.segments[r.segments.length - 1].id;
+        else if (playNow.length) lastIdRef.current = playNow[0].id;
+        enqueue(playNow);
+      })
+      .catch(() => undefined);
   }, [emitFx, enqueue, nextTrack, setMusicGain]);
 
   const tuneOut = useCallback(() => {
+    suspendedRef.current = false;
     genRef.current++;
     cancelPlaybackRef.current?.();
     queueRef.current = [];
@@ -355,7 +396,7 @@ export function useStation() {
     setMusicAnalyser(null);
     tunedRef.current = false;
     setTunedIn(false); setMuted(false); mutedRef.current = false;
-    setSpeaking(false); setCurrent(null); setTuning(false); setVoiceMode(null);
+    setSpeaking(false); setCurrent(null); setTuning(false); setVoiceMode(null); setAudioError(null); setQueueLength(0);
     levelsRef.current.voice = 0; levelsRef.current.music = 0;
     // Stay caught up so tuning back in joins live rather than replaying the gap.
     void api.get<StationResponse>(`/api/station?after=${lastIdRef.current ?? ""}`).then((r) => { lastIdRef.current = r.latest; }).catch(() => undefined);
@@ -381,15 +422,46 @@ export function useStation() {
     cancelPlaybackRef.current?.();
   }, []);
 
-  // ---------- derived mascot state ----------
+  // ---------- live call integration: park the station, keep the queue ----------
+  const suspendStation = useCallback(() => {
+    if (suspendedRef.current) return;
+    suspendedRef.current = true;
+    // Put the in-flight segment back at the head so nothing is lost.
+    if (currentRef.current) {
+      queueRef.current.unshift(currentRef.current);
+      setQueueLength(queueRef.current.length);
+      seenRef.current.delete(currentRef.current.id);
+      currentRef.current = null;
+    }
+    cancelPlaybackRef.current?.(); // resolves the active playback → pump parks at the loop top
+    if (hasTts()) window.speechSynthesis.cancel();
+    stopVoiceElement();
+    setSpeaking(false);
+    setCurrent(null);
+    setMusicGain(0);
+  }, [setMusicGain, stopVoiceElement]);
+
+  const resumeStation = useCallback(() => {
+    if (!suspendedRef.current) return;
+    suspendedRef.current = false;
+    if (tunedRef.current && musicElRef.current) {
+      void musicElRef.current.play().catch(() => undefined);
+      setMusicGain(mutedRef.current ? 0 : MUSIC_LEVEL);
+    }
+    void pump();
+  }, [pump, setMusicGain]);
+
+  // ---------- derived states ----------
   const mascot: MascotState = !tunedIn ? "idle" : muted ? "muted" : tuning ? "tuning" : speaking ? (current?.kind === "alert" ? "alert" : "talking") : "music";
 
+  // One playback state machine for the UI: off_air → tuning → speaking ↔ music.
+  const status: StationStatus = !tunedIn ? "off_air" : tuning ? "tuning" : speaking ? "speaking" : "music";
   const voiceLabel = voiceMode === "mp3" ? "ElevenLabs voice" : voiceMode === "tts" ? "Browser voice" : current?.audioProvider === "elevenlabs" ? "ElevenLabs voice" : "Browser voice";
 
   return {
-    tunedIn, muted, speaking, current, recent, notice, mascot, voiceLabel, musicAnalyser, queueLength: queueRef.current.length,
-    levelsRef, fxRef, emitFx,
-    tuneIn, tuneOut, toggleMute, skip,
+    tunedIn, muted, speaking, current, recent, notice, mascot, status, audioError, voiceLabel, musicAnalyser, queueLength,
+    levelsRef, fxRef, emitFx, lastPollAtRef,
+    tuneIn, tuneOut, toggleMute, skip, suspendStation, resumeStation,
   };
 }
 

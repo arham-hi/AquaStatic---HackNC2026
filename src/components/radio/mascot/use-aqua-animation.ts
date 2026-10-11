@@ -43,6 +43,7 @@ export const makeRig = (): Rig => ({
 
 const LED_COLORS: Record<string, string> = {
   idle: "#46c8ff", tuning: "#ffffff", music: "#3ee6c4", talking: "#ff5a5a", alert: "#ffb02e", muted: "#8a99a6",
+  listening: "#b78cff", thinking: "#ffd166", error: "#ff4444",
 };
 
 const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
@@ -72,12 +73,12 @@ export function useAquaAnimation(rig: Rig, anim: AquaAnim, displayTex: { on: THR
     const k = Math.min(1, dt * 12); // frame-rate independent-ish smoothing
 
     // ---- root: bob + dance + jump ----
-    const bobAmp = (s === "idle" ? 0.05 : s === "music" ? 0.085 : s === "alert" ? 0.012 : talking ? 0.03 : 0.02) * damp;
-    const bobSpd = s === "music" ? 2.7 : talking ? 2.1 : 1.35;
+    const bobAmp = (s === "idle" ? 0.05 : s === "music" ? 0.085 : s === "alert" ? 0.012 : s === "error" ? 0.008 : talking ? 0.03 : 0.02) * damp;
+    const bobSpd = s === "music" ? 2.7 : talking ? 2.1 : s === "thinking" ? 0.8 : 1.35;
     const jump = celebrating ? Math.sin((Math.PI * fp) / 1.15) * 0.42 : bouncing ? Math.sin((Math.PI * fp) / 0.7) * 0.24 : 0;
     if (rig.root) {
       rig.root.position.y = BASE_Y + bobAmp * Math.sin(t * bobSpd) + jump;
-      const tiltTarget = s === "music" ? Math.sin(t * 2.7) * 0.055 : talking ? Math.sin(t * 1.9) * 0.018 : 0;
+      const tiltTarget = s === "music" ? Math.sin(t * 2.7) * 0.055 : s === "thinking" ? 0.09 : talking ? Math.sin(t * 1.9) * 0.018 : 0;
       S.tiltZ = lerp(S.tiltZ, tiltTarget * damp, k * 0.6);
       rig.root.rotation.z = S.tiltZ;
       rig.root.rotation.y = Math.sin(t * 0.5) * 0.03 * damp;
@@ -88,7 +89,7 @@ export function useAquaAnimation(rig: Rig, anim: AquaAnim, displayTex: { on: THR
 
     // ---- head/face tilt: hover + cursor proximity ----
     const px = anim.pointer.current.x, py = anim.pointer.current.y;
-    const wantX = anim.hover.current ? -py * 0.1 : 0;
+    const wantX = anim.hover.current ? -py * 0.1 : s === "listening" ? 0.07 : s === "thinking" ? -0.05 : 0;
     const wantY = anim.pointer.current.active ? px * (anim.hover.current ? 0.16 : 0.07) : 0;
     S.headX = lerp(S.headX, wantX * damp + (anim.reduced ? 0 : wantX * 0), k * 0.5);
     S.headY = lerp(S.headY, wantY, k * 0.5);
@@ -101,7 +102,7 @@ export function useAquaAnimation(rig: Rig, anim: AquaAnim, displayTex: { on: THR
     S.blinkT += dt / 0.16;
     if (t > S.nextBlink) { S.blinkT = 0; S.nextBlink = t + 2.0 + Math.random() * 3.2 - (talking ? 0.4 : 0); }
     const blink = S.blinkT < 1 ? Math.sin(Math.min(1, S.blinkT) * Math.PI) : 0;
-    const eyeWTarget = celebrating || s === "tuning" || anim.hover.current ? 1.13 : s === "muted" ? 0.55 : s === "alert" ? 0.92 : 1;
+    const eyeWTarget = celebrating || s === "tuning" || anim.hover.current ? 1.13 : s === "muted" ? 0.55 : s === "error" ? 0.68 : s === "alert" ? 0.92 : s === "listening" ? 1.08 : 1;
     S.eyeW = lerp(S.eyeW, eyeWTarget, k * 0.4);
     const eyeY = Math.max(0.04, S.eyeW * (1 - blink));
     const happyTarget = celebrating ? 1 : 0;
@@ -114,19 +115,21 @@ export function useAquaAnimation(rig: Rig, anim: AquaAnim, displayTex: { on: THR
       if (hap) hap.scale.setScalar(Math.max(0.001, S.happy));
       if (pupil) {
         const drift = talking ? Math.sin(t * 0.9) * 0.012 : 0;
-        const tx = anim.pointer.current.active && !anim.reduced ? px * 0.07 : 0;
-        const ty = anim.pointer.current.active && !anim.reduced ? py * 0.05 : 0;
+        let tx = anim.pointer.current.active && !anim.reduced ? px * 0.07 : 0;
+        let ty = anim.pointer.current.active && !anim.reduced ? py * 0.05 : 0;
+        if (s === "thinking") { tx = 0.055; ty = 0.055; } // eyes drift up-right, classic thinking pose
         pupil.position.x = lerp(pupil.position.x, tx + drift, k);
         pupil.position.y = lerp(pupil.position.y, ty + (talking ? Math.cos(t * 1.3) * 0.008 : 0), k);
       }
     }
 
     // ---- brows ----
-    const browIn = s === "alert" ? 0.34 : talking ? 0.12 : 0;
+    const browIn = s === "alert" ? 0.34 : s === "error" ? 0.2 : talking ? 0.12 : 0;
     const browUp = celebrating || s === "tuning" ? 0.22 : 0;
-    S.browL = lerp(S.browL, -browIn + browUp, k * 0.5);
+    const browLUp = s === "thinking" ? 0.16 : 0; // one raised brow while thinking
+    S.browL = lerp(S.browL, -browIn + browUp - browLUp, k * 0.5);
     S.browR = lerp(S.browR, browIn - browUp, k * 0.5);
-    if (rig.face.browL) { rig.face.browL.rotation.z = S.browL; rig.face.browL.position.y = 0.68 + browUp * 0.1; }
+    if (rig.face.browL) { rig.face.browL.rotation.z = S.browL; rig.face.browL.position.y = 0.68 + browUp * 0.1 + browLUp * 0.08; }
     if (rig.face.browR) { rig.face.browR.rotation.z = S.browR; rig.face.browR.position.y = 0.68 + browUp * 0.1; }
 
     // ---- mouth: real voice amplitude (MP3 RMS or boundary-kicked TTS) ----
@@ -162,7 +165,7 @@ export function useAquaAnimation(rig: Rig, anim: AquaAnim, displayTex: { on: THR
         (s === "music" ? Math.sin(t * 5.4) * 0.07 * Math.max(0.3, m) : 0) +
         (s === "tuning" ? Math.sin(t * 14) * 0.09 : 0) +
         (anim.hover.current ? -0.07 : 0);
-      rig.body.antenna.rotation.z = (s === "alert" ? sway * 0.3 : sway) * damp - 0.12;
+      rig.body.antenna.rotation.z = (s === "alert" ? sway * 0.3 : s === "listening" ? sway - 0.05 : sway) * damp - 0.12;
       rig.body.antenna.rotation.x = Math.sin(t * 1.7) * 0.03 * damp;
     }
     if (rig.body.antennaTip) rig.body.antennaTip.emissiveIntensity = 0.7 + Math.sin(t * 3) * 0.3 + energy * 0.6;

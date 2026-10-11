@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
 
 export function MascotFallback({ state, voiceLevel = 0, className }: { state: MascotState; voiceLevel?: number; className?: string }) {
   const talking = state === "talking" || state === "alert";
-  const led = { idle: "#46c8ff", tuning: "#ffffff", music: "#3ee6c4", talking: "#ff5a5a", alert: "#ffb02e", muted: "#8a99a6" }[state];
+  const led = { idle: "#46c8ff", tuning: "#ffffff", music: "#3ee6c4", talking: "#ff5a5a", alert: "#ffb02e", muted: "#8a99a6", listening: "#b78cff", thinking: "#ffd166", error: "#ff4444" }[state];
   return (
     <div className={cn("grid place-items-center", className)} data-state={state} role="img" aria-label={`Aqua, the Aqua FM mascot — ${state}`}>
       <svg viewBox="0 0 260 240" className="aqua-svg h-full max-h-[320px] w-auto drop-shadow-[0_18px_30px_rgba(20,110,170,0.35)]" aria-hidden>
