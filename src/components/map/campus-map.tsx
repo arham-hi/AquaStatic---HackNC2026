@@ -278,7 +278,8 @@ export function CampusMap({ theme, markers, selectedId, onSelect, show3d, transi
 
     // remove stale pins + stale cluster bubbles
     for (const [id, ref] of markerRefs.current) {
-      if (!visible.has(id)) { ref.marker.remove(); ref.root.unmount(); markerRefs.current.delete(id); }
+      // Defer root.unmount() — this effect can run while React is mid-render (zoomend → state).
+      if (!visible.has(id)) { ref.marker.remove(); queueMicrotask(() => ref.root.unmount()); markerRefs.current.delete(id); }
     }
     for (const [key, mk] of clusterRefs.current) {
       if (!clusters.has(key)) { mk.remove(); clusterRefs.current.delete(key); }
